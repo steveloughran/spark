@@ -54,6 +54,33 @@ private[hive] case class HiveFunctionWrapper(functionClassName: String)
     getContextOrSparkClassLoader
       .loadClass(functionClassName).newInstance.asInstanceOf[UDFType]
   }
+  def getDefaultPartitionName = ConfVars.DEFAULTPARTITIONNAME.defaultVal
+
+  def getBuilder: Builder = SearchArgument.FACTORY.newBuilder()
+
+
+  def loadPartition(db: Hive, loadPath: Path, tableName: String,
+                    partSpec: JMap[String, String], replace: Boolean, holdDDLTime: Boolean,
+                    inheritTableSpecs: Boolean, isSkewedStoreAsSubdir: Boolean,
+                    isSrcLocal: Boolean, isAcid: Boolean) = {
+    db.loadPartition(loadPath, tableName, partSpec, replace, holdDDLTime,
+      inheritTableSpecs, isSkewedStoreAsSubdir)
+
+  }
+  def loadTable(db: Hive, loadPath: Path, tableName: String, replace: Boolean,
+                holdDDLTime: Boolean, isSrcLocal: Boolean, isSkewedStoreAsSubdir: Boolean,
+                isAcid: Boolean) = {
+    db.loadTable(loadPath, tableName, replace, holdDDLTime)
+
+  }
+
+  def loadDynamicPartitions(db: Hive, loadPath: Path, tableName: String,
+                            partSpec: JMap[String, String], replace: Boolean, numP: Int, holdDDLTime: Boolean,
+                            isSkewedStoreAsSubdir: Boolean,
+                            listBucketingEnabled: Boolean, isAcid: Boolean) = {
+    db.loadDynamicPartitions(loadPath, tableName, partSpec, replace, numP, holdDDLTime,
+      isSkewedStoreAsSubdir)
+  }
 }
 
 /**

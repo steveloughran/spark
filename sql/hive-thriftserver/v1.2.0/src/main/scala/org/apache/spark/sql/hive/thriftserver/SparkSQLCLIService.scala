@@ -27,6 +27,7 @@ import org.apache.commons.logging.Log
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.shims.ShimLoader
 import org.apache.hadoop.security.UserGroupInformation
+import org.apache.hive.service.server.HiveServer2
 import org.apache.hive.service.Service.STATE
 import org.apache.hive.service.auth.HiveAuthFactory
 import org.apache.hive.service.cli._
@@ -36,14 +37,14 @@ import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.hive.thriftserver.ReflectionUtils._
 import org.apache.spark.util.Utils
 
-private[hive] class SparkSQLCLIService(hiveContext: HiveContext)
-  extends CLIService
+private[hive] class SparkSQLCLIService(hiveContext: HiveContext, hiveServer2: HiveServer2)
+  extends CLIService(hiveServer2)
   with ReflectedCompositeService {
 
   override def init(hiveConf: HiveConf) {
     setSuperField(this, "hiveConf", hiveConf)
 
-    val sparkSqlSessionManager = new SparkSQLSessionManager(hiveContext)
+    val sparkSqlSessionManager = new SparkSQLSessionManager(hiveContext, hiveServer2)
     setSuperField(this, "sessionManager", sparkSqlSessionManager)
     addService(sparkSqlSessionManager)
     var sparkServiceUGI: UserGroupInformation = null

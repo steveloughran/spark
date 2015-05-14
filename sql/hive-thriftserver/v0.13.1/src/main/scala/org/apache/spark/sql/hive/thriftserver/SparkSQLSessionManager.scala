@@ -23,18 +23,14 @@ import org.apache.commons.logging.Log
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
 import org.apache.hive.service.cli.session.SessionManager
-import org.apache.hive.service.server.HiveServer2
-
+import org.apache.hive.service.server.{HiveServer2}
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.hive.thriftserver.ReflectionUtils._
 import org.apache.spark.sql.hive.thriftserver.server.SparkSQLOperationManager
-import org.apache.hive.service.cli.SessionHandle
 
-private[hive] class SparkSQLSessionManager(hiveContext: HiveContext, hiveServer2: HiveServer2)
-  extends SessionManager(hiveServer2)
+private[hive] class SparkSQLSessionManager(hiveContext: HiveContext)
+  extends SessionManager
   with ReflectedCompositeService {
-
-  private lazy val sparkSqlOperationManager = new SparkSQLOperationManager(hiveContext)
 
   override def init(hiveConf: HiveConf) {
     setSuperField(this, "hiveConf", hiveConf)
@@ -44,14 +40,10 @@ private[hive] class SparkSQLSessionManager(hiveContext: HiveContext, hiveServer2
     getAncestorField[Log](this, 3, "LOG").info(
       s"HiveServer2: Async execution pool size $backgroundPoolSize")
 
+    val sparkSqlOperationManager = new SparkSQLOperationManager(hiveContext)
     setSuperField(this, "operationManager", sparkSqlOperationManager)
     addService(sparkSqlOperationManager)
 
     initCompositeService(hiveConf)
-  }
-
-  override def closeSession(sessionHandle: SessionHandle) {
-    super.closeSession(sessionHandle)
-    sparkSqlOperationManager.sessionToActivePool -= sessionHandle
   }
 }

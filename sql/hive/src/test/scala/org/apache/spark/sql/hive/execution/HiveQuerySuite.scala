@@ -842,7 +842,7 @@ class HiveQuerySuite extends HiveComparisonTest with BeforeAndAfter {
         .zip(parts)
         .map { case (k, v) =>
           if (v == "NULL") {
-            s"$k=${ConfVars.DEFAULTPARTITIONNAME.defaultVal}"
+            s"$k=${HiveShim.getDefaultPartitionName}"
           } else {
             s"$k=$v"
           }

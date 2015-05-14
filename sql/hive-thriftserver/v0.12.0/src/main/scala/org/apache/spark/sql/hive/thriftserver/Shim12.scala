@@ -30,6 +30,8 @@ import org.apache.hadoop.security.UserGroupInformation
 import org.apache.hive.service.cli._
 import org.apache.hive.service.cli.operation.ExecuteStatementOperation
 import org.apache.hive.service.cli.session.HiveSession
+import org.apache.hive.service.cli.session.SessionManager
+import org.apache.hive.service.server.{HiveServer2, ServerOptionsProcessor}
 
 import org.apache.spark.Logging
 import org.apache.spark.sql.{DataFrame, SQLConf, Row => SparkRow}
@@ -47,6 +49,13 @@ private[thriftserver] object HiveThriftServerShim {
   def setServerUserName(sparkServiceUGI: UserGroupInformation, sparkCliService:SparkSQLCLIService) = {
     val serverUserName = ShimLoader.getHadoopShims.getShortUserName(sparkServiceUGI)
     setSuperField(sparkCliService, "serverUserName", serverUserName)
+  }
+
+  def init(args: Array[String]) = {
+    val optionsProcessor = new ServerOptionsProcessor("HiveThriftServer2")
+    if (!optionsProcessor.process(args)) {
+      System.exit(-1)
+    }
   }
 }
 
