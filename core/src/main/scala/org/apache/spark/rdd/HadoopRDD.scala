@@ -196,15 +196,24 @@ class HadoopRDD[K, V](
     val jobConf = getJobConf()
     // add the credentials here as this can be called before SparkContext initialized
     SparkHadoopUtil.get.addCredentials(jobConf)
+
+    val columns = jobConf.get("hive.io.file.readcolumn.names")
+    val sargs = jobConf.get("sarg.pushdown")
+    val ids = jobConf.get("hive.io.file.readcolumn.ids")
+    logInfo("getPartitions start sargs: " + sargs + " columns " + columns + " ids: " + ids)
+
+
     val inputFormat = getInputFormat(jobConf)
     if (inputFormat.isInstanceOf[Configurable]) {
       inputFormat.asInstanceOf[Configurable].setConf(jobConf)
     }
     val inputSplits = inputFormat.getSplits(jobConf, minPartitions)
+    logInfo("getPartitions finish")
     val array = new Array[Partition](inputSplits.size)
     for (i <- 0 until inputSplits.size) {
       array(i) = new HadoopPartition(id, i, inputSplits(i))
     }
+    logInfo("getPartitions done")
     array
   }
 
@@ -214,6 +223,11 @@ class HadoopRDD[K, V](
       val split = theSplit.asInstanceOf[HadoopPartition]
       logInfo("Input split: " + split.inputSplit)
       val jobConf = getJobConf()
+      if (true) {
+        val columns = jobConf.get("hive.io.file.readcolumn.names")
+        val sargs = jobConf.get("sarg.pushdown")
+        logInfo("sargs: " + sargs + " columns " + columns)
+      }
 
       val inputMetrics = context.taskMetrics
         .getInputMetricsForReadMethod(DataReadMethod.Hadoop)

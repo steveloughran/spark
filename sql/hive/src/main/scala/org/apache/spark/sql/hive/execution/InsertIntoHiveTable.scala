@@ -51,6 +51,8 @@ case class InsertIntoHiveTable(
   @transient lazy val outputClass = newSerializer(table.tableDesc).getSerializedClass
   @transient private lazy val hiveContext = new Context(sc.hiveconf)
   @transient private lazy val catalog = sc.catalog
+  @transient private lazy val db = Hive.get(sc.hiveconf)
+
 
   private def newSerializer(tableDesc: TableDesc): Serializer = {
     val serializer = tableDesc.getDeserializerClass.newInstance().asInstanceOf[Serializer]
@@ -199,45 +201,39 @@ case class InsertIntoHiveTable(
           orderedPartitionSpec.put(entry.getName,partitionSpec.get(entry.getName).getOrElse(""))
       }
       val partVals = MetaStoreUtils.getPvals(table.hiveQlTable.getPartCols, partitionSpec)
-      catalog.synchronized {
-        catalog.client.validatePartitionNameCharacters(partVals)
-      }
+      db.validatePartitionNameCharacters(partVals)
       // inheritTableSpecs is set to true. It should be set to false for a IMPORT query
       // which is currently considered as a Hive native command.
       val inheritTableSpecs = true
       // TODO: Correctly set isSkewedStoreAsSubdir.
       val isSkewedStoreAsSubdir = false
       if (numDynamicPartitions > 0) {
-        catalog.synchronized {
-          catalog.client.loadDynamicPartitions(
-            outputPath,
-            qualifiedTableName,
-            orderedPartitionSpec,
-            overwrite,
-            numDynamicPartitions,
-            holdDDLTime,
-            isSkewedStoreAsSubdir)
-        }
-      } else {
-        catalog.synchronized {
-          catalog.client.loadPartition(
-            outputPath,
-            qualifiedTableName,
-            orderedPartitionSpec,
-            overwrite,
-            holdDDLTime,
-            inheritTableSpecs,
-            isSkewedStoreAsSubdir)
-        }
-      }
-    } else {
-      catalog.synchronized {
-        catalog.client.loadTable(
+        HiveShim.loadDynamicPartitions(db,
           outputPath,
           qualifiedTableName,
+          orderedPartitionSpec,
           overwrite,
-          holdDDLTime)
+          numDynamicPartitions,
+          holdDDLTime,
+          isSkewedStoreAsSubdir,
+          false, false
+        )
+      } else {
+        HiveShim.loadPartition(db,
+          outputPath,
+          qualifiedTableName,
+          orderedPartitionSpec,
+          overwrite,
+          holdDDLTime,
+          inheritTableSpecs,
+          isSkewedStoreAsSubdir, false, false)
       }
+    } else {
+      HiveShim.loadTable(db,
+        outputPath,
+        qualifiedTableName,
+        overwrite,
+        holdDDLTime, false, false, false)
     }
 
     // Invalidate the cache.

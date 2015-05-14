@@ -26,7 +26,7 @@ import scala.language.implicitConversions
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.ql.Driver
-import org.apache.hadoop.hive.ql.metadata.Table
+import org.apache.hadoop.hive.ql.metadata.{Hive, Table}
 import org.apache.hadoop.hive.ql.parse.VariableSubstitution
 import org.apache.hadoop.hive.ql.processors._
 import org.apache.hadoop.hive.ql.session.SessionState
@@ -39,6 +39,11 @@ import org.apache.spark.sql.catalyst.analysis.{Analyzer, EliminateSubQueries, Ov
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.{ExecutedCommand, ExtractPythonUdfs, QueryExecutionException, SetCommand}
 import org.apache.spark.sql.hive.execution.{DescribeHiveTableCommand, HiveNativeCommand}
+import org.apache.spark.sql.hive._
+
+import org.apache.spark.sql.hive.{ShimFileSinkDesc => FileSinkDesc}
+import org.apache.spark.sql.hive.HiveShim._
+
 import org.apache.spark.sql.sources.{DDLParser, DataSourceStrategy}
 import org.apache.spark.sql.types._
 
@@ -70,6 +75,17 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
   protected[sql] def convertMetastoreParquetWithSchemaMerging: Boolean =
     getConf("spark.sql.hive.convertMetastoreParquet.mergeSchema", "false") == "true"
 
+/*
+  if (ShimLoader.getHadoopShims.isSecurityEnabled) {
+    val hiveConf = new HiveConf
+    try {
+      HiveAuthFactory.loginFromKeytab(hiveConf)
+      ShimLoader.getHadoopShims.getUGIForConf(hiveConf)
+    } catch {
+      case e @ (_: IOException | _: LoginException) =>
+        throw new Exception("Unable to login to kerberos with given principal/keytab", e)
+    }
+  }*/
   /**
    * When true, a table created by a Hive CTAS statement (no USING clause) will be
    * converted to a data source table, using the data source set by spark.sql.sources.default.

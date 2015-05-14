@@ -18,35 +18,34 @@
 package org.apache.spark.sql.hive
 
 
-import com.esotericsoftware.kryo.io.Output
+import scala.reflect.runtime.universe.TypeTag
+
 import com.esotericsoftware.kryo.Kryo
+import com.esotericsoftware.kryo.io.Output
 import org.apache.commons.codec.binary.Base64
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.hive.ql.io.sarg.SearchArgument
+
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.ScalaReflection
-import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.sql.hive.orc._
-import org.apache.spark.sql.SchemaRDD
-import scala.reflect.runtime.universe.{TypeTag, typeTag}
 
 package object orc {
   implicit class OrcContext(sqlContext: HiveContext) {
 
-    def orcFile(filePath: String) =  new SchemaRDD(sqlContext,
+    def orcFile(filePath: String) =  new DataFrame(sqlContext,
       OrcRelation(filePath,
         Some(sqlContext.sparkContext.hadoopConfiguration), sqlContext))
 
     def createOrcFile[A <: Product : TypeTag](path: String,
       allowExisting: Boolean = true,
-      conf: Configuration = new Configuration()): SchemaRDD = {
-      new SchemaRDD(
+      conf: Configuration = new Configuration()): DataFrame = {
+      new DataFrame(
         sqlContext,
         OrcRelation.createEmpty(path,
           ScalaReflection.attributesFor[A], allowExisting, conf, sqlContext))
     }
   }
 
-  implicit class OrcSchemaRDD(rdd: SchemaRDD) {
+  implicit class OrcSchemaRDD(rdd: DataFrame) {
     def saveAsOrcFile(path: String): Unit = {
       rdd.sqlContext.executePlan(WriteToOrcFile(path,
         rdd.logicalPlan)).toRdd

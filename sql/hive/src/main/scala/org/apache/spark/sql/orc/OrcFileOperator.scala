@@ -20,16 +20,15 @@ package org.apache.spark.sql.hive.orc
 import java.io.IOException
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.fs.permission.FsAction
-import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.ql.io.orc.{OrcFile, Reader}
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector
-import org.apache.hadoop.mapred.JobConf
-import org.apache.hadoop.mapreduce.Job
+
 import org.apache.spark.Logging
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.types.StructType
 import org.apache.spark.sql.hive.HiveMetastoreTypes
+import org.apache.spark.sql.types.StructType
 
 private[orc] object OrcFileOperator extends Logging{
 

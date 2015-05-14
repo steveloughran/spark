@@ -17,35 +17,31 @@
 
 package org.apache.spark.sql.hive.orc
 
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util._
-import org.apache.hadoop.conf.{Configurable, Configuration}
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.hive.common.`type`.{HiveDecimal, HiveVarchar}
-import org.apache.hadoop.hive.ql.io.orc.{OrcFile, CompressionKind, OrcInputFormat, OrcSerde, OrcOutputFormat}
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils
-import org.apache.hadoop.hive.serde2.objectinspector._
-import org.apache.hadoop.hive.serde2.typeinfo.{TypeInfoUtils, TypeInfo}
-import org.apache.spark.sql.hive.HiveShim
-import org.apache.hadoop.io.NullWritable
-import org.apache.hadoop.io.Writable
-import org.apache.hadoop.mapred.{Reporter, JobConf}
 
-import org.apache.hadoop.mapreduce.{Job, TaskID}
-import org.apache.hadoop.mapreduce.lib.output.{FileOutputFormat, FileOutputCommitter}
+import scala.collection.JavaConversions._
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.hive.ql.io.orc.{OrcInputFormat, OrcOutputFormat, OrcSerde}
+import org.apache.hadoop.hive.serde2.objectinspector._
+import org.apache.hadoop.hive.serde2.typeinfo.{TypeInfo, TypeInfoUtils}
+import org.apache.hadoop.io.{NullWritable, Writable}
+import org.apache.hadoop.mapred.{JobConf, Reporter}
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat
+import org.apache.hadoop.mapreduce.lib.output.{FileOutputCommitter, FileOutputFormat}
+import org.apache.hadoop.mapreduce.{Job, TaskID}
+
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.mapreduce.SparkHadoopMapReduceUtil
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.plans.logical.{UnaryNode => LogicalUnaryNode, LogicalPlan}
-import org.apache.spark.sql.catalyst.types.StructType
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.execution.{LeafNode, UnaryNode, SparkPlan}
-import org.apache.spark.sql.hive.orc._
-import org.apache.spark.sql.hive.{HadoopTypeConverter, HiveMetastoreTypes}
-import org.apache.spark.{TaskContext, SerializableWritable}
-import scala.collection.JavaConversions._
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, UnaryNode => LogicalUnaryNode}
+import org.apache.spark.sql.execution.{LeafNode, SparkPlan, UnaryNode}
+import org.apache.spark.sql.hive.{HadoopTypeConverter, HiveMetastoreTypes, HiveShim}
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.{SerializableWritable, TaskContext}
 
 // Be ware this is logical plan
 case class WriteToOrcFile(

@@ -17,10 +17,16 @@
 
 package org.apache.spark.sql.hive
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.mapreduce.Job
+
+//import org.apache.hive.spark.client.Job
+
 import org.apache.spark.sql.catalyst.expressions.Row
 
 import scala.collection.JavaConversions._
 
+import org.apache.spark.Logging
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -256,7 +262,7 @@ private[hive] trait HiveStrategies {
     }
   }
 
-  object OrcOperations extends Strategy with Logging{
+  object OrcOperations extends Strategy with Logging {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case WriteToOrcFile(path, child) =>
         val relation =

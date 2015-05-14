@@ -450,6 +450,11 @@ private[hive] object HiveShim {
     db.loadDynamicPartitions(loadPath, tableName, partSpec, replace, numP, holdDDLTime,
       isSkewedStoreAsSubdir)
   }
+
+  def dropIndex(db: Hive, db_name: String, tbl_name: String, index_name: String,
+      throwException: Boolean): Boolean = {
+    db.dropIndex(db_name, tbl_name, index_name, throwException)
+  }
 }
 
 /*

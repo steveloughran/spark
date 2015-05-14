@@ -405,12 +405,13 @@ class TestHiveContext(sc: SparkContext) extends HiveContext(sc) {
       cacheManager.clearCache()
       loadedTables.clear()
       catalog.cachedDataSourceTables.invalidateAll()
-      catalog.client.getAllTables("default").foreach { t =>
+      val hive = catalog.client
+      hive.getAllTables("default").foreach { t =>
         logDebug(s"Deleting table $t")
         val table = catalog.client.getTable("default", t)
 
-        catalog.client.getIndexes("default", t, 255).foreach { index =>
-          catalog.client.dropIndex("default", t, index.getIndexName, true)
+        hive.getIndexes("default", t, 255).foreach { index =>
+          HiveShim.dropIndex(hive, "default", t, index.getIndexName, true)
         }
 
         if (!table.isIndexTable) {

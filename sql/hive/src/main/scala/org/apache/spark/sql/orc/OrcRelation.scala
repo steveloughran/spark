@@ -17,24 +17,13 @@
 
 package org.apache.spark.sql.hive.orc
 
-import java.io.IOException
-import java.util.{ArrayList, HashSet, List}
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.fs.permission.FsAction
-import org.apache.hadoop.hive.ql.io.orc.{OrcProto, OrcFile, Reader}
-import org.apache.hadoop.hive.serde2.objectinspector.{ObjectInspector, StructField=>HiveStructField, StructObjectInspector}
+import org.apache.hadoop.hive.serde2.objectinspector.{StructField => HiveStructField}
+
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.analysis.{MultiInstanceRelation, UnresolvedException}
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan}
-
-import scala.collection.JavaConversions._
-
-
-
-
 
 private[sql] case class OrcRelation(path: String,
                   @transient conf: Option[Configuration],
