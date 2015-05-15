@@ -127,6 +127,7 @@
     <hbase.artifact>hbase</hbase.artifact>
     <flume.version>1.4.0</flume.version>
     <zookeeper.version>3.4.5</zookeeper.version>
+    <curator.version>2.4.0</curator.version>
     <hive.group>org.spark-project.hive</hive.group>
     <!-- Version used in Maven Hive dependency -->
     <hive.version>0.13.1a</hive.version>
@@ -703,7 +704,7 @@
       <dependency>
         <groupId>org.apache.curator</groupId>
         <artifactId>curator-recipes</artifactId>
-        <version>2.4.0</version>
+        <version>${curator.version}</version>
         <scope>${hadoop.deps.scope}</scope>
         <exclusions>
           <exclusion>
@@ -711,6 +712,16 @@
             <artifactId>netty</artifactId>
           </exclusion>
         </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.curator</groupId>
+        <artifactId>curator-client</artifactId>
+        <version>${curator.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.curator</groupId>
+        <artifactId>curator-framework</artifactId>
+        <version>${curator.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
@@ -1649,13 +1660,15 @@
       </properties>
     </profile>
 
-    <!-- Hadoop 2.6 dependencies -->
     <profile>
       <id>hadoop-2.6</id>
       <properties>
         <hadoop.version>2.6.0</hadoop.version>
-        <protobuf.version>2.5.0</protobuf.version>
         <jets3t.version>0.9.3</jets3t.version>
+        <commons.math3.version>3.1.1</commons.math3.version>
+        <zookeeper.version>3.4.6</zookeeper.version>
+        <curator.version>2.6.0</curator.version>
+        <protobuf.version>2.5.0</protobuf.version>
         <hbase.version>0.98.7-hadoop2</hbase.version>
         <avro.mapred.classifier>hadoop2</avro.mapred.classifier>
         <codehaus.jackson.version>1.9.13</codehaus.jackson.version>
@@ -1692,7 +1705,7 @@
         <dependency>
           <groupId>org.apache.curator</groupId>
           <artifactId>curator-recipes</artifactId>
-          <version>2.4.0</version>
+          <version>${curator.version}</version>
           <exclusions>
             <exclusion>
               <groupId>org.apache.zookeeper</groupId>
