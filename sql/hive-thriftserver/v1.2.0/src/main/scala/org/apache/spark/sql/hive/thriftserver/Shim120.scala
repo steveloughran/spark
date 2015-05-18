@@ -32,18 +32,16 @@ import org.apache.hadoop.hive.ql.metadata.Hive
 import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.hadoop.hive.shims.ShimLoader
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.hive.service.server.ServerOptionsProcessor
 import org.apache.hive.service.cli._
 import org.apache.hive.service.cli.operation.ExecuteStatementOperation
 import org.apache.hive.service.cli.session.HiveSession
-import org.apache.hive.service.cli.session.SessionManager
-import org.apache.hive.service.server.{HiveServer2}
+import org.apache.hive.service.server.ServerOptionsProcessorWrapper
 
 import org.apache.spark.Logging
-import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.hive.thriftserver.ReflectionUtils._
 import org.apache.spark.sql.hive.{HiveContext, HiveMetastoreTypes}
-import org.apache.spark.sql.{SchemaRDD, Row => SparkRow}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Row => SparkRow, SchemaRDD}
 
 /**``
  * A compatibility layer for interacting with Hive version 0.12.0.
