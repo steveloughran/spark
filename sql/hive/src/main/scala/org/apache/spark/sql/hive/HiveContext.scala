@@ -76,6 +76,7 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
     getConf("spark.sql.hive.convertMetastoreParquet.mergeSchema", "false") == "true"
 
 /*
+HIVE-1.2 : move to hive shims
   if (ShimLoader.getHadoopShims.isSecurityEnabled) {
     val hiveConf = new HiveConf
     try {

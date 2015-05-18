@@ -22,12 +22,16 @@ import scala.collection.JavaConversions._
 import java.io._
 import java.util.{ArrayList => JArrayList}
 
-import jline.{ConsoleReader, History}
+import scala.tools.jline.console.ConsoleReader
+import scala.tools.jline.console.history.{FileHistory, History}
+
+//import scala.tools.jline.console.history.History
+
 
 import org.apache.commons.lang.StringUtils
 import org.apache.commons.logging.LogFactory
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.hive.cli.{CliDriver, CliSessionState, OptionsProcessor}
+import org.apache.hadoop.hive.cli.{CliSessionState, CliDriver, OptionsProcessor}
 import org.apache.hadoop.hive.common.LogUtils.LogInitializationException
 import org.apache.hadoop.hive.common.{HiveInterruptCallback, HiveInterruptUtils, LogUtils}
 import org.apache.hadoop.hive.conf.HiveConf
@@ -108,6 +112,7 @@ private[hive] object SparkSQLCLIDriver {
         }
       }
     )
+/* HIVE-1.2
 
     // "-h" option has been passed, so connect to Hive thrift server.
     if (sessionState.getHost != null) {
@@ -130,6 +135,7 @@ private[hive] object SparkSQLCLIDriver {
       conf.setClassLoader(loader)
       Thread.currentThread().setContextClassLoader(loader)
     }
+*/
 
     val cli = new SparkSQLCLIDriver
     cli.setHiveVariables(oproc.getHiveVariables)
@@ -165,14 +171,17 @@ private[hive] object SparkSQLCLIDriver {
     val reader = new ConsoleReader()
     reader.setBellEnabled(false)
     // reader.setDebug(new PrintWriter(new FileWriter("writer.debug", true)))
+/*
+    HIVE-1.2
     CliDriver.getCommandCompletor.foreach((e) => reader.addCompletor(e))
+*/
 
     val historyDirectory = System.getProperty("user.home")
 
     try {
       if (new File(historyDirectory).exists()) {
         val historyFile = historyDirectory + File.separator + ".hivehistory"
-        reader.setHistory(new History(new File(historyFile)))
+        reader.setHistory(new FileHistory(new File(historyFile)))
       } else {
         System.err.println("WARNING: Directory for Hive history file: " + historyDirectory +
                            " does not exist.   History will not be available during this session.")
@@ -237,8 +246,15 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
 
   // Force initializing SparkSQLEnv. This is put here but not object SparkSQLCliDriver
   // because the Hive unit tests do not go through the main() code path.
-  if (!sessionState.isRemoteMode) {
+  if (isRemoteMode(sessionState)) {
     SparkSQLEnv.init()
+  }
+
+  def isRemoteMode(sessionState: CliSessionState): Boolean = {
+/* HIVE-1.2
+    sessionState.isRemoteMode
+*/
+    false;
   }
 
   override def processCmd(cmd: String): Int = {
@@ -250,7 +266,7 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
       tokens(0).equalsIgnoreCase("source") ||
       cmd_trimmed.startsWith("!") ||
       tokens(0).toLowerCase.equals("list") ||
-      sessionState.isRemoteMode) {
+        isRemoteMode(sessionState)) {
       val start = System.currentTimeMillis()
       super.processCmd(cmd)
       val end = System.currentTimeMillis()

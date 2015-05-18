@@ -44,8 +44,8 @@ private[thriftserver] class SparkSQLOperationManager(hiveContext: HiveContext)
       confOverlay: JMap[String, String],
       async: Boolean): ExecuteStatementOperation = synchronized {
 
-    val operation = new SparkExecuteStatementOperation(parentSession, statement, confOverlay)(
-      hiveContext, sessionToActivePool)
+    val operation = new SparkExecuteStatementOperation(parentSession, statement, confOverlay,
+    true)(hiveContext, sessionToActivePool)
     handleToOperation.put(operation.getHandle, operation)
     operation
   }

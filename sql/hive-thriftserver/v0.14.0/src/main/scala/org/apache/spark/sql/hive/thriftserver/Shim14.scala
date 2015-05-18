@@ -25,31 +25,31 @@ import java.util.{ArrayList => JArrayList, List => JList, Map => JMap}
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{ArrayBuffer, Map => SMap}
 import scala.math._
-import scala.tools.jline.console.ConsoleReader
 
-import org.apache.hadoop.hive.cli.CliDriver
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.metastore.api.FieldSchema
 import org.apache.hadoop.hive.ql.metadata.Hive
 import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.hadoop.hive.shims.ShimLoader
 import org.apache.hadoop.security.UserGroupInformation
+import org.apache.hive.service.server.ServerOptionsProcessorWrapper
 import org.apache.hive.service.cli._
 import org.apache.hive.service.cli.operation.ExecuteStatementOperation
 import org.apache.hive.service.cli.session.HiveSession
-import org.apache.hive.service.server.ServerOptionsProcessorWrapper
+import org.apache.hive.service.cli.session.SessionManager
+import org.apache.hive.service.server.{HiveServer2}
 
 import org.apache.spark.Logging
+import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.hive.thriftserver.ReflectionUtils._
 import org.apache.spark.sql.hive.{HiveContext, HiveMetastoreTypes}
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Row => SparkRow, DataFrame, SchemaRDD}
+import org.apache.spark.sql.{SchemaRDD, Row => SparkRow}
 
-/**
- * A compatibility layer for interacting with Hive version 1.2.0.
+/**``
+ * A compatibility layer for interacting with Hive version 0.12.0.
  */
 private[thriftserver] object HiveThriftServerShim {
-  val version = "1.2.0"
+  val version = "0.14.10"
 
   def setServerUserName(sparkServiceUGI: UserGroupInformation, sparkCliService:SparkSQLCLIService) = {
     setSuperField(sparkCliService, "serviceUGI", sparkServiceUGI)
@@ -80,10 +80,10 @@ private[hive] class SparkExecuteStatementOperation(
     confOverlay: JMap[String, String],
     runInBackground: Boolean = true)(
     hiveContext: HiveContext,
-    sessionToActivePool: SMap[SessionHandle, String]) extends ExecuteStatementOperation(
+    sessionToActivePool: SMap[HiveSession, String]) extends ExecuteStatementOperation(
   parentSession, statement, confOverlay, runInBackground) with Logging {
 
-  private var result: DataFrame = _
+  private var result: SchemaRDD = _
   private var iter: Iterator[SparkRow] = _
   private var dataTypes: Array[DataType] = _
 
@@ -97,10 +97,7 @@ private[hive] class SparkExecuteStatementOperation(
         val useIncrementalCollect =
           hiveContext.getConf("spark.sql.thriftServer.incrementalCollect", "false").toBoolean
         if (useIncrementalCollect) {
-          //  HIVE-1.2
-          logWarning("ignoring incremental collect flag")
-          result.collect().iterator
-
+          result.toLocalIterator
         } else {
           result.collect().iterator
         }
@@ -269,5 +266,4 @@ private[hive] class SparkExecuteStatementOperation(
       }
     }
   }
-
 }

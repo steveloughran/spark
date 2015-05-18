@@ -53,6 +53,10 @@
       <groupId>${hive.group}</groupId>
       <artifactId>hive-beeline</artifactId>
     </dependency>
+    <dependency>
+      <groupId>${jline.groupid}</groupId>
+      <artifactId>jline</artifactId>
+    </dependency>
   </dependencies>
   <build>
     <outputDirectory>target/scala-${scala.binary.version}/classes</outputDirectory>
