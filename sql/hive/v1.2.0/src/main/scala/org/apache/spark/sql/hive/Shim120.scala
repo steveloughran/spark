@@ -25,6 +25,7 @@ import scala.language.implicitConversions
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.hive.ql.parse.{SelectSkippingSemanticAnalyzer, SemanticAnalyzer}
 import org.apache.hadoop.io.{NullWritable, Writable}
 
 import org.apache.hadoop.hive.common.StatsSetupConst
@@ -452,7 +453,7 @@ private[hive] object HiveShim {
 
   def getDefaultPartitionName = ConfVars.DEFAULTPARTITIONNAME.defaultStrVal
 
-  def getBuilder: Builder= SearchArgumentFactory.newBuilder()
+  def getBuilder: Builder = SearchArgumentFactory.newBuilder()
 
   def loadPartition(db: Hive, loadPath: Path, tableName: String,
     partSpec: JMap[String, String], replace: Boolean, holdDDLTime: Boolean,
@@ -483,10 +484,14 @@ private[hive] object HiveShim {
     throwException: Boolean): Boolean = {
     db.dropIndex(db_name, tbl_name, index_name, throwException, true)
   }
+
+  def getSelectSkippingSemanticAnalyzer(conf: HiveConf): SemanticAnalyzer = {
+    new SelectSkippingSemanticAnalyzer(conf)
+  }
 }
 
 /*
- * Bug introdiced in hive-0.13. FileSinkDesc is serilizable, but its member path is not.
+ * Bug introdiced in hive-0.13. FileSinkDesc is serializable, but its member path is not.
  * Fix it through wrapper.
  */
 private[hive] class ShimFileSinkDesc(

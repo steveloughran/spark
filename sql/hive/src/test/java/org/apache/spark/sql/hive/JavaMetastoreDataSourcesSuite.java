@@ -88,8 +88,10 @@ public class JavaMetastoreDataSourcesSuite {
   @After
   public void tearDown() throws IOException {
     // Clean up tables.
-    sqlContext.sql("DROP TABLE IF EXISTS javaSavedTable");
-    sqlContext.sql("DROP TABLE IF EXISTS externalTable");
+    if (sqlContext != null) {
+      sqlContext.sql("DROP TABLE IF EXISTS javaSavedTable");
+      sqlContext.sql("DROP TABLE IF EXISTS externalTable");
+    }
   }
 
   @Test
