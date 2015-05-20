@@ -69,8 +69,8 @@ class HiveQuerySuite extends HiveComparisonTest with BeforeAndAfter {
   createQueryTest("! operator",
     """
       |SELECT a FROM (
-      |  SELECT 1 AS a FROM src LIMIT 1 UNION ALL
-      |  SELECT 2 AS a FROM src LIMIT 1) table
+      |  SELECT 1 AS a FROM src UNION ALL
+      |  SELECT 2 AS a FROM src ) table
       |WHERE !(a>1)
     """.stripMargin)
 
@@ -131,15 +131,15 @@ class HiveQuerySuite extends HiveComparisonTest with BeforeAndAfter {
   createQueryTest("count distinct 1 value strings",
     """
       |SELECT COUNT(DISTINCT a) FROM (
-      |  SELECT 'a' AS a FROM src LIMIT 1 UNION ALL
-      |  SELECT 'b' AS a FROM src LIMIT 1) table
+      |  SELECT 'a' AS a FROM src UNION
+      |  SELECT 'b' AS a FROM src ) table
     """.stripMargin)
 
   createQueryTest("count distinct 1 value",
     """
       |SELECT COUNT(DISTINCT a) FROM (
-      |  SELECT 1 AS a FROM src LIMIT 1 UNION ALL
-      |  SELECT 1 AS a FROM src LIMIT 1) table
+      |  SELECT 1 AS a FROM src UNION
+      |  SELECT 1 AS a FROM src ) table
     """.stripMargin)
 
   createQueryTest("count distinct 2 values",
