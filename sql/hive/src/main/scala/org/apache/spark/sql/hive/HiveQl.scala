@@ -277,7 +277,7 @@ private[hive] object HiveQl {
             |${dumpTree(getAst(sql))}
             |$e
             |${e.getStackTrace.head}
-          """.stripMargin)
+          """.stripMargin).initCause(e)
     }
   }
 
