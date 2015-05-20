@@ -25,8 +25,8 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.execution.SparkSqlSerializer
 
 /**
- * Tests to validate packing and shim integration.
- * Standalone for ease of running and diagnostics.
+ * Tests to validate packing and shim integration, including
+ * multiple shading of transitive dependencies
  *
  * If these tests fail, nothing else stands a chance
  */
@@ -37,7 +37,7 @@ class PackagingSuite extends FunSuite {
   }
 
 
-  test("Kryo") {
+  test("LocalKryo") {
     new Kryo()
   }
 
@@ -49,6 +49,18 @@ class PackagingSuite extends FunSuite {
   test("Utilites") {
     // force load of the class
     Utilities.MAPNAME.length()
+  }
+
+  test("HiveFunctionWrapper") {
+    HiveFunctionWrapper("anything")
+  }
+
+  test("LoadShadedKryo") {
+    HiveShim.loadHiveClass(HiveShim.kryoClassname)
+  }
+
+  test("LoadShadedInstantiator") {
+    HiveShim.loadHiveClass(HiveShim.stdInstantiatorStrategyClassname)
   }
 
 }

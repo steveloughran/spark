@@ -29,11 +29,10 @@ import org.apache.hadoop.hive.ql.parse.{SelectSkippingSemanticAnalyzer, Semantic
 import org.apache.hadoop.io.{NullWritable, Writable}
 
 import org.apache.hadoop.hive.common.StatsSetupConst
-import org.apache.hadoop.hive.common.`type`.HiveDecimal
+import org.apache.hadoop.hive.common.`type`.{Decimal128, HiveDecimal}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
 import org.apache.hadoop.hive.ql.Context
-import org.apache.hadoop.hive.ql.io.sarg.SearchArgument
 import org.apache.hadoop.hive.ql.io.sarg.SearchArgument.Builder
 import org.apache.hadoop.hive.ql.io.sarg.SearchArgumentFactory
 import org.apache.hadoop.hive.ql.metadata.{Hive, Partition, Table}
@@ -69,16 +68,18 @@ private[hive] case class HiveFunctionWrapper(var functionClassName: String)
 
   import java.io.{InputStream, OutputStream}
 
-  import com.esotericsoftware.kryo.Kryo
   import org.apache.hadoop.hive.ql.exec.{UDF, Utilities}
 
   import org.apache.spark.util.Utils._
 
   @transient
+  private val kryoClass = HiveShim.loadHiveClass(HiveShim.kryoClassname)
+
+  @transient
   private val methodDeSerialize = {
     val method = classOf[Utilities].getDeclaredMethod(
       "deserializeObjectByKryo",
-      classOf[Kryo],
+      kryoClass,
       classOf[InputStream],
       classOf[Class[_]])
     method.setAccessible(true)
@@ -89,7 +90,7 @@ private[hive] case class HiveFunctionWrapper(var functionClassName: String)
   private val methodSerialize = {
     val method = classOf[Utilities].getDeclaredMethod(
       "serializeObjectByKryo",
-      classOf[Kryo],
+      kryoClass,
       classOf[Object],
       classOf[OutputStream])
     method.setAccessible(true)
@@ -164,6 +165,22 @@ private[hive] case class HiveFunctionWrapper(var functionClassName: String)
  */
 private[hive] object HiveShim {
   val version = "1.2.0"
+
+  val esotericsoftware = "org.apache.hive.com.esotericsoftware"
+  val kryoClassname = esotericsoftware + ".kryo.Kryo"
+  val stdInstantiatorStrategyClassname = esotericsoftware +
+      ".shaded.org.objenesis.strategy.StdInstantiatorStrategy"
+
+  /**
+   * Load a hive class. Use the classloader of a Hive class to
+   * ensure that if classloaders ever get involved, the Hive loader
+   * will be picked (not any context CL)
+   * @param classname name of class to look up
+   * @return a loaded class
+   */
+  def loadHiveClass(classname: String): Class[_] = {
+    new Decimal128().getClass.getClassLoader.loadClass(HiveShim.kryoClassname)
+  }
 
   def getTableDesc(
     serdeClass: Class[_ <: Deserializer],
