@@ -25,7 +25,6 @@ import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import org.apache.hadoop.hive.metastore.api.{FieldSchema, Partition => TPartition, Table => TTable}
 import org.apache.hadoop.hive.metastore.{TableType, Warehouse}
 import org.apache.hadoop.hive.ql.metadata._
-import org.apache.hadoop.hive.ql.parse.SelectSkippingSemanticAnalyzer
 import org.apache.hadoop.hive.ql.plan.CreateTableDesc
 import org.apache.hadoop.hive.serde.serdeConstants
 import org.apache.hadoop.hive.serde2.`lazy`.LazySimpleSerDe
@@ -609,7 +608,7 @@ private[hive] class HiveMetastoreCatalog(hive: HiveContext) extends Catalog with
         val desc: Option[CreateTableDesc] = if (tableExists(Seq(databaseName, tblName))) {
           None
         } else {
-          val sa = new SelectSkippingSemanticAnalyzer(hive.hiveconf)
+          val sa = HiveShim.getSelectSkippingSemanticAnalyzer(hive.hiveconf)
 
           sa.analyze(extra, new Context(hive.hiveconf))
           Some(sa.getQB().getTableDesc)
