@@ -179,7 +179,7 @@ class SQLQuerySuite extends QueryTest {
     val originalConf = getConf("spark.sql.hive.convertCTAS", "false")
 
     setConf("spark.sql.hive.convertCTAS", "true")
-
+    sql("DROP TABLE IF EXISTS ctas1")
     sql("CREATE TABLE ctas1 AS SELECT key k, value FROM src ORDER BY k, value")
     sql("CREATE TABLE IF NOT EXISTS ctas1 AS SELECT key k, value FROM src ORDER BY k, value")
     var message = intercept[AnalysisException] {
@@ -224,6 +224,7 @@ class SQLQuerySuite extends QueryTest {
   }
 
   test("CTAS with serde") {
+    sql("DROP TABLE IF EXISTS ctas1")
     sql("CREATE TABLE ctas1 AS SELECT key k, value FROM src ORDER BY k, value").collect()
     sql(
       """CREATE TABLE ctas2
@@ -372,6 +373,7 @@ class SQLQuerySuite extends QueryTest {
   }
 
   test("test CTAS") {
+    sql("DROP TABLE IF EXISTS test_ctas_123")
     checkAnswer(sql("CREATE TABLE test_ctas_123 AS SELECT key, value FROM src"), Seq.empty[Row])
     checkAnswer(
       sql("SELECT key, value FROM test_ctas_123 ORDER BY key"),
@@ -380,6 +382,8 @@ class SQLQuerySuite extends QueryTest {
 
   test("SPARK-4825 save join to table") {
     val testData = sparkContext.parallelize(1 to 10).map(i => TestData(i, i.toString)).toDF()
+    sql("DROP TABLE IF EXISTS test1")
+    sql("DROP TABLE IF EXISTS test2")
     sql("CREATE TABLE test1 (key INT, value STRING)")
     testData.insertInto("test1")
     sql("CREATE TABLE test2 (key INT, value STRING)")
@@ -460,6 +464,7 @@ class SQLQuerySuite extends QueryTest {
     val rowRdd = sparkContext.parallelize(row :: Nil)
 
     TestHive.createDataFrame(rowRdd, schema).registerTempTable("testTable")
+    sql("DROP TABLE IF EXISTS nullValuesInInnerComplexTypes")
 
     sql(
       """CREATE TABLE nullValuesInInnerComplexTypes
@@ -509,6 +514,7 @@ class SQLQuerySuite extends QueryTest {
     jsonRDD(rdd).registerTempTable("data")
     val originalConf = getConf("spark.sql.hive.convertCTAS", "false")
     setConf("spark.sql.hive.convertCTAS", "false")
+    sql("DROP TABLE IF EXISTS explodeTest")
 
     sql("CREATE TABLE explodeTest (key bigInt)")
     table("explodeTest").queryExecution.analyzed match {
@@ -531,10 +537,12 @@ class SQLQuerySuite extends QueryTest {
   test("sanity test for SPARK-6618") {
     (1 to 100).par.map { i =>
       val tableName = s"SPARK_6618_table_$i"
-      sql(s"CREATE TABLE $tableName (col1 string)")
-      catalog.lookupRelation(Seq(tableName))
-      table(tableName)
-      tables()
+      try {
+        sql(s"CREATE TABLE $tableName (col1 string)")
+        catalog.lookupRelation(Seq(tableName))
+        table(tableName)
+        tables()
+      } finally
       sql(s"DROP TABLE $tableName")
     }
   }
