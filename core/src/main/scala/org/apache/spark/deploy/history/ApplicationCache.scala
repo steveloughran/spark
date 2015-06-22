@@ -19,9 +19,8 @@ package org.apache.spark.deploy.history
 
 import com.google.common.base.Ticker
 import com.google.common.cache.{CacheBuilder, RemovalListener, RemovalNotification, CacheLoader}
-
+import scala.collection.JavaConversions._
 import org.apache.spark.Logging
-import org.apache.spark.deploy.history.CacheEntry
 import org.apache.spark.ui.SparkUI
 
 /**
@@ -33,8 +32,8 @@ import org.apache.spark.ui.SparkUI
  * @param retainedApplications number of retained applications
  */
 private[history] class ApplicationCache(operations: ApplicationCacheOperations,
-    refreshInterval: Long,
-    retainedApplications: Int,
+    val refreshInterval: Long,
+    val retainedApplications: Int,
     time: Ticker)
     extends RemovalListener[String, CacheEntry] with Logging {
 
@@ -76,13 +75,14 @@ private[history] class ApplicationCache(operations: ApplicationCacheOperations,
     val entry = appCache.get(key)
     if (!entry.completed &&
         (time.read() - entry.timestamp) > refreshInterval) {
-        // trigger refresh
+      // trigger refresh
       logDebug(s"refreshing $key")
-      operations.detachSparkUI(entry.ui, true)
+      operations.refreshTriggered(key, entry.ui)
       appCache.invalidate(key)
-      get(key)
+      appCache.get(key)
+    } else {
+      entry
     }
-    entry
   }
 
 
@@ -91,7 +91,17 @@ private[history] class ApplicationCache(operations: ApplicationCacheOperations,
    * @param rm removal notification
    */
   override def onRemoval(rm: RemovalNotification[String, CacheEntry]): Unit = {
-    operations.detachSparkUI(rm.getValue().ui, false)
+    operations.detachSparkUI(rm.getValue().ui)
+  }
+
+
+  override def toString: String = {
+    val sb = new StringBuilder(
+      s"ApplicationCache($refreshInterval, $retainedApplications) size ${appCache.size() }")
+    for (elt <- appCache.asMap().values()) {
+      sb.append(s" ${elt.ui.appName}->$elt")
+    }
+    sb.toString()
   }
 }
 
@@ -125,10 +135,15 @@ private[history] trait ApplicationCacheOperations {
    *  Detach a reconstructed UI
    *
    * @param ui Spark UI
-   * @param refreshInProgress flag to indicate this was triggered by a refresh of an
-   *                          incomplete application
    */
-  def detachSparkUI(ui: SparkUI, refreshInProgress: Boolean): Unit;
+  def detachSparkUI(ui: SparkUI): Unit;
 
 
+  /**
+   * Notification of a refresh. This will be followed by the normal
+   * detach/attach operations
+   * @param key
+   * @param ui
+   */
+  def refreshTriggered(key: String, ui: SparkUI): Unit;
 }
