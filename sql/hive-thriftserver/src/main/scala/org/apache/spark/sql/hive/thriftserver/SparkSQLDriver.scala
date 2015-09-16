@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hive.thriftserver
 
-import java.util.{Arrays, ArrayList => JArrayList, List => JList}
+import java.util.{ArrayList => JArrayList, Arrays, List => JList}
 
 import scala.collection.JavaConverters._
 

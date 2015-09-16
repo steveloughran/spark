@@ -39,7 +39,7 @@ import org.apache.thrift.transport.TSocket
 
 import org.apache.spark.Logging
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.util.{ShutdownHookManager, Utils}
+import org.apache.spark.util.{ShutdownHookManager}
 
 /**
  * This code doesn't support remote connections in Hive 1.2+, as the underlying CliDriver
@@ -203,12 +203,10 @@ private[hive] object SparkSQLCLIDriver extends Logging {
 
     var ret = 0
     var prefix = ""
-    val currentDB = ReflectionUtils.invokeStatic(classOf[CliDriver], "getFormattedDb",
-      classOf[HiveConf] -> conf, classOf[CliSessionState] -> sessionState)
-
+    val currentDB = CliDriver.getFormattedDb(conf, sessionState)
     def promptWithCurrentDB: String = s"$prompt$currentDB"
-    def continuedPromptWithDBSpaces: String = continuedPrompt + ReflectionUtils.invokeStatic(
-      classOf[CliDriver], "spacesForString", classOf[String] -> currentDB)
+    def continuedPromptWithDBSpaces: String = continuedPrompt +
+        CliDriver.spacesForString(currentDB)
 
     var currentPrompt = promptWithCurrentDB
     var line = reader.readLine(currentPrompt + "> ")

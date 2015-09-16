@@ -17,49 +17,20 @@
 
 package org.apache.spark.sql.hive.thriftserver
 
-import java.io.IOException
-import java.util.{List => JList}
-import javax.security.auth.login.LoginException
 
-import scala.collection.JavaConverters._
-
-import org.apache.commons.logging.Log
 import org.apache.hadoop.hive.conf.HiveConf
-import org.apache.hadoop.hive.shims.Utils
-import org.apache.hadoop.security.UserGroupInformation
-import org.apache.hive.service.Service.STATE
-import org.apache.hive.service.auth.HiveAuthFactory
 import org.apache.hive.service.cli._
+import org.apache.hive.service.cli.session.SessionManager
 import org.apache.hive.service.server.HiveServer2
-import org.apache.hive.service.{AbstractService, Service, ServiceException}
 
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.sql.hive.thriftserver.ReflectionUtils._
 
 private[hive] class SparkSQLCLIService(hiveServer: HiveServer2, hiveContext: HiveContext)
-  extends CLIService(hiveServer)
-  with ReflectedCompositeService {
+  extends CLIService(hiveServer) {
 
-  override def init(hiveConf: HiveConf) {
-    setSuperField(this, "hiveConf", hiveConf)
-
-    val sparkSqlSessionManager = new SparkSQLSessionManager(hiveServer, hiveContext)
-    setSuperField(this, "sessionManager", sparkSqlSessionManager)
-    addService(sparkSqlSessionManager)
-    var sparkServiceUGI: UserGroupInformation = null
-
-    if (UserGroupInformation.isSecurityEnabled) {
-      try {
-        HiveAuthFactory.loginFromKeytab(hiveConf)
-        sparkServiceUGI = Utils.getUGI()
-        setSuperField(this, "serviceUGI", sparkServiceUGI)
-      } catch {
-        case e @ (_: IOException | _: LoginException) =>
-          throw new ServiceException("Unable to login to kerberos with given principal/keytab", e)
-      }
-    }
-
-    initCompositeService(hiveConf)
+  override protected def createSessionManager(hiveConf: HiveConf, server: HiveServer2):
+  SessionManager = {
+    new SparkSQLSessionManager(server, hiveContext)
   }
 
   override def getInfo(sessionHandle: SessionHandle, getInfoType: GetInfoType): GetInfoValue = {
@@ -72,16 +43,3 @@ private[hive] class SparkSQLCLIService(hiveServer: HiveServer2, hiveContext: Hiv
   }
 }
 
-private[thriftserver] trait ReflectedCompositeService { this: AbstractService =>
-  def initCompositeService(hiveConf: HiveConf) {
-    // Emulating `CompositeService.init(hiveConf)`
-    val serviceList = getAncestorField[JList[Service]](this, 2, "serviceList")
-    serviceList.asScala.foreach(_.init(hiveConf))
-
-    // Emulating `AbstractService.init(hiveConf)`
-    invoke(classOf[AbstractService], this, "ensureCurrentState", classOf[STATE] -> STATE.NOTINITED)
-    setAncestorField(this, 3, "hiveConf", hiveConf)
-    invoke(classOf[AbstractService], this, "changeState", classOf[STATE] -> STATE.INITED)
-    getAncestorField[Log](this, 3, "LOG").info(s"Service: $getName is inited.")
-  }
-}

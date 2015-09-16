@@ -92,7 +92,7 @@
       <version>${project.version}</version>
       <exclusions>
         <exclusion>
-          <groupId>org.spark-project.protobuf</groupId>
+          <groupId>${hive.group}.protobuf</groupId>
           <artifactId>protobuf-java</artifactId>
         </exclusion>
       </exclusions>
