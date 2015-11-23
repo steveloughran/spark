@@ -47,7 +47,7 @@ class HistoryServer(
     securityManager: SecurityManager,
     port: Int)
   extends WebUI(securityManager, port, conf) with Logging with UIRoot  with
-  ApplicationCacheOperations {
+    ApplicationCacheOperations {
 
   // How many applications to retain
   private val retainedApplications = conf.getInt("spark.history.retainedApplications", 50)
@@ -103,7 +103,6 @@ class HistoryServer(
   def getSparkUI(appKey: String): Option[SparkUI] = {
     Option(appCache.get(appKey).ui)
   }
-
 
   initialize()
 
