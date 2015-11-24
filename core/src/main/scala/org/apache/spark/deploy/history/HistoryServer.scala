@@ -28,7 +28,7 @@ import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.status.api.v1.{ApiRootResource, ApplicationInfo, ApplicationsListResource, UIRoot}
 import org.apache.spark.ui.{SparkUI, UIUtils, WebUI}
 import org.apache.spark.ui.JettyUtils._
-import org.apache.spark.util.{ShutdownHookManager, Utils}
+import org.apache.spark.util.{ShutdownHookManager, SystemClock, Utils}
 
 /**
  * A web server that renders SparkUIs of completed applications.
@@ -46,8 +46,8 @@ class HistoryServer(
     provider: ApplicationHistoryProvider,
     securityManager: SecurityManager,
     port: Int)
-  extends WebUI(securityManager, port, conf) with Logging with UIRoot  with
-    ApplicationCacheOperations {
+  extends WebUI(securityManager, port, conf) with Logging with UIRoot
+  with ApplicationCacheOperations {
 
   // How many applications to retain
   private val retainedApplications = conf.getInt("spark.history.retainedApplications", 50)
@@ -58,7 +58,7 @@ class HistoryServer(
 
 
   private val appCache = new ApplicationCache(this,
-      incompleteApplicationRefreshInterval, retainedApplications, Ticker.systemTicker())
+      incompleteApplicationRefreshInterval, retainedApplications, new SystemClock())
 
   private val loaderServlet = new HttpServlet {
     protected override def doGet(req: HttpServletRequest, res: HttpServletResponse): Unit = {
@@ -150,16 +150,6 @@ class HistoryServer(
   }
 
   /**
-   * Notification of a refresh. This will be followed by the normal
-   * detach/attach operations
-   * @param key
-   * @param ui
-   */
-  override def refreshTriggered(key: String, ui: SparkUI): Unit = {
-    logDebug(s"Refreshing app $key")
-  }
-
-  /**
    * Get the application UI and whether or not it is completed
    * @param appId application ID
    * @param attemptId attempt ID
@@ -167,6 +157,11 @@ class HistoryServer(
    */
   override def getAppUI(appId: String, attemptId: Option[String]): Option[SparkUI] = {
     provider.getAppUI(appId, attemptId)
+  }
+
+  override def isUpdated(appId: String, attemptId: Option[String],
+      updateTimeMillis: Long): Boolean = {
+    provider.isUpdated(appId, attemptId, updateTimeMillis)
   }
 
   /**
@@ -198,7 +193,7 @@ class HistoryServer(
 
   private def loadAppUi(appId: String, attemptId: Option[String]): Boolean = {
     try {
-      appCache.get(appId + attemptId.map { id => s"/$id" }.getOrElse(""))
+      appCache.get(appId, attemptId)
       true
     } catch {
       case e: Exception => e.getCause() match {
