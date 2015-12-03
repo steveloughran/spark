@@ -189,7 +189,20 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
 
   override def getListing(): Iterable[FsApplicationHistoryInfo] = applications.values
 
-  override def getAppUI(appId: String, attemptId: Option[String]): Option[SparkUI] = {
+  /**
+   * Look up an application attempt
+   * @param appId application ID
+   * @param attemptId Attempt ID, if set
+   * @return the matching attempt, if found
+   */
+  def lookup(appId: String, attemptId: Option[String]): Option[FsApplicationAttemptInfo] = {
+    applications.get(appId).flatMap { appInfo =>
+      appInfo.attempts.find(_.attemptId == attemptId)
+    }
+  }
+
+  override def getAppUI(appId: String, attemptId: Option[String])
+      : Option[(SparkUI, Option[Any])] = {
     try {
       applications.get(appId).flatMap { appInfo =>
         appInfo.attempts.find(_.attemptId == attemptId).flatMap { attempt =>
@@ -212,7 +225,7 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
             ui.getSecurityManager.setAdminAcls(appListener.adminAcls.getOrElse(""))
             ui.getSecurityManager.setViewAcls(attempt.sparkUser,
               appListener.viewAcls.getOrElse(""))
-            ui
+            (ui, None)
           }
         }
       }
@@ -275,7 +288,7 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
           mod1 >= mod2
       }
 
-      logDebug(s"New attempts found: ${logInfos.size} ${logInfos.map(_.getPath)}")
+      logDebug(s"New/updated attempts found: ${logInfos.size} ${logInfos.map(_.getPath)}")
       logInfos.grouped(20)
         .map { batch =>
           replayExecutor.submit(new Runnable {
@@ -384,7 +397,7 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
         val bus = new ReplayListenerBus()
         val res = replay(fileStatus, bus)
         res match {
-          case Some(r) => logDebug(s"Application log ${r.logPath} loaded successfully.")
+          case Some(r) => logDebug(s"Application log ${r.logPath} loaded successfully: $r")
           case None => logWarning(s"Failed to load application log ${fileStatus.getPath}. " +
               "The application may have not started.")
         }
@@ -780,13 +793,20 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
   }
 */
 
+  /**
+   * String description for diagnostics
+   * @return a summary of the component staet
+   */
   override def toString: String = {
-    s"""
+    val header = s"""
       | FsHistoryProvider: logdir=$logDir,
-      | last scan time =$lastScanTime,
-      | applications=$applications,
-      | polling thread=$initThread,
+      | last scan time=$lastScanTime
+      | Cached application count =${applications.size}}
+      |
     """.stripMargin
+    val sb = new StringBuilder(header)
+    applications.foreach(entry => sb.append(entry._2).append("\n"))
+    sb.toString
   }
 
   /**
@@ -795,14 +815,14 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
    * @param appId application ID
    * @param attemptId optional attempt ID
    * @param updateTimeMillis time in milliseconds to use as the threshold for an update.
+   * @param data a long containing the file size at the time of the last check
    * @return true if the application was updated since `updateTimeMillis`
    */
-  override def isUpdated(appId: String, attemptId: Option[String], updateTimeMillis: Long)
-    : Boolean = {
-
-    applications.get(appId).exists {
-      _.attempts.find(_.attemptId == attemptId)
-        .exists(_.fileSizeUpdateTime > updateTimeMillis)
+  override def isUpdated(appId: String, attemptId: Option[String], updateTimeMillis: Long,
+      data: Option[Any]): Boolean = {
+    lookup(appId, attemptId).exists { attempt =>
+        attempt.lastUpdated > updateTimeMillis ||
+      attempt.fileSizeUpdateTime > updateTimeMillis
     }
   }
 }
@@ -829,12 +849,21 @@ private class FsApplicationAttemptInfo(
     completed: Boolean = true,
     val fileSize: Long = -1,
     val fileSizeUpdateTime: Long = -1)
-  extends ApplicationAttemptInfo(
-      attemptId, startTime, endTime, lastUpdated, sparkUser, completed)
+  extends ApplicationAttemptInfo(attemptId, startTime, endTime,
+    lastUpdated, sparkUser, completed) {
+  override def toString: String = {
+    s"FsApplicationAttemptInfo($logPath, $name, $appId," +
+      s" ${super.toString}, $fileSize, $fileSizeUpdateTime"
+  }
+}
 
 private class FsApplicationHistoryInfo(
     id: String,
     override val name: String,
     override val attempts: List[FsApplicationAttemptInfo],
     val lastUpdated: Long)
-  extends ApplicationHistoryInfo(id, name, attempts)
+  extends ApplicationHistoryInfo(id, name, attempts) {
+  override def toString: String = {
+    s"FsApplicationHistoryInfo(lastUpdated = $lastUpdated, ${super.toString}"
+  }
+}
