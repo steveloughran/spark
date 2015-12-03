@@ -788,21 +788,6 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
     method.invoke(dfs, action).asInstanceOf[Boolean]
   }
 
-
-/*
-  def isCompleted(appId: String, attemptId: Option[String]): Boolean = {
-
-    val name = appId + attemptId.map { id => s"_$id" }.getOrElse("")
-    if (isAppCompleted.keySet.contains(name)) {
-      true
-    } else if (isAppCompleted.contains(name + EventLoggingListener.IN_PROGRESS)) {
-      false
-    } else {
-      throw new NoSuchElementException(s"no app with key $appId/$attemptId.")
-    }
-  }
-*/
-
   /**
    * String description for diagnostics
    * @return a summary of the component staet
