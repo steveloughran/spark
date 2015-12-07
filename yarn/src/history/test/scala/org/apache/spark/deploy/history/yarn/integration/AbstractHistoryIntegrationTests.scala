@@ -103,6 +103,7 @@ abstract class AbstractHistoryIntegrationTests
     sparkConf.set(OPTION_BACKGROUND_REFRESH_INTERVAL, "0s")
     sparkConf.set(OPTION_YARN_LIVENESS_CHECKS, "false")
     sparkConf.set(OPTION_WINDOW_LIMIT, "0")
+    sparkConf.set("spark.history.cache.window", "50ms")
     sparkConf.setAppName(APP_NAME)
   }
 
@@ -353,7 +354,7 @@ abstract class AbstractHistoryIntegrationTests
       attemptId: Option[String]): SparkUI = {
     val ui = provider.getAppUI(appId, attemptId)
     assertSome(ui, s"Failed to retrieve App UI under ID $appId attempt $attemptId")
-    ui.get
+    ui.get.ui
   }
 
   /**
@@ -422,7 +423,7 @@ abstract class AbstractHistoryIntegrationTests
     val appUIwrapper = provider.getAppUI(appId, attemptIdOption)
     val ui = appUIwrapper match {
       case Some(yarnAppUI) =>
-        yarnAppUI
+        yarnAppUI.ui
       // success
       case None => fail(s"Did not get a UI for $appId/$attemptIdOption")
     }

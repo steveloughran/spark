@@ -36,7 +36,7 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 
 import org.apache.spark.{Logging, SecurityManager, SparkConf, SparkException}
 import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.deploy.history.{ApplicationHistoryProvider, HistoryServer}
+import org.apache.spark.deploy.history.{ApplicationHistoryProvider, HistoryProviderUpdateState, HistoryServer, LoadedAppUI}
 import org.apache.spark.deploy.history.yarn.YarnHistoryService._
 import org.apache.spark.deploy.history.yarn.{ExtendedMetricsSource, YarnTimelineUtils}
 import org.apache.spark.deploy.history.yarn.YarnTimelineUtils._
@@ -701,7 +701,7 @@ private[spark] class YarnHistoryProvider(sparkConf: SparkConf)
    * @param attemptId The application attempt ID (or `None` if there is no attempt ID).
    * @return The application's UI, or `None` if application is not found.
    */
-  override def getAppUI(appId: String, attemptId: Option[String]): Option[SparkUI] = {
+  override def getAppUI(appId: String, attemptId: Option[String]): Option[LoadedAppUI] = {
 
     logInfo(s"Request UI with appId $appId attempt $attemptId")
     if (!enabled) {
@@ -772,7 +772,9 @@ private[spark] class YarnHistoryProvider(sparkConf: SparkConf)
         ui.getSecurityManager.setAdminAcls(appListener.adminAcls.getOrElse(""))
         ui.getSecurityManager.setViewAcls(appListener.sparkUser.getOrElse("<Not Started>"),
           appListener.viewAcls.getOrElse(""))
-        Some(ui)
+        val latestState = toApplicationHistoryInfo(attemptEntity).attempts.head
+        val updateState = new YarnHistoryProviderUpdateState(latestState.version, latestState.lastUpdated)
+        Some(LoadedAppUI(ui, latestState.lastUpdated, Some(updateState)))
       } catch {
 
         case e: FileNotFoundException =>
@@ -1162,6 +1164,39 @@ private[spark] class YarnHistoryProvider(sparkConf: SparkConf)
     }
   }
 
+  /**
+   * Probe for an update to an (incompleted) application
+   * @param appId application ID
+   * @param attemptId optional attempt ID
+   * @param updateTimeMillis time in milliseconds to use as the threshold for an update.
+   * @param data any other data the operations implementation can use to determine age
+   * @return true if the application was updated since `updateTimeMillis`
+   */
+  override def isUpdated(appId: String, attemptId: Option[String], updateTimeMillis: Long,
+      data: Option[HistoryProviderUpdateState]): Boolean = {
+    val updateState = data.get.asInstanceOf[YarnHistoryProviderUpdateState]
+    logDebug(s"Probe for $appId/$attemptId @${updateState.version}")
+
+    val (foundApp, attempt, attempts) = getApplications.lookupAttempt(appId, attemptId)
+    attempt match {
+      case None =>
+        logDebug(s"Application Attempt $appId/$attemptId not found")
+        false
+      case Some(a) =>
+        logDebug(s"attempt version =${a.version} in $a")
+        a.version > updateState.version
+    }
+  }
+
+}
+
+/**
+ * Update state for attempts
+ * @param version version field off entity (if found)
+ * @param updated last updated field off entity (if found)
+ */
+private[yarn] class YarnHistoryProviderUpdateState(val version: Long, val updated: Long)
+    extends HistoryProviderUpdateState {
 }
 
 /**
