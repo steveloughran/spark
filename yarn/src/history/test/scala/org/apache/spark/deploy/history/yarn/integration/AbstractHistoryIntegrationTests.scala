@@ -54,6 +54,7 @@ abstract class AbstractHistoryIntegrationTests
   protected var _applicationHistoryServer: ApplicationHistoryServer = _
   protected var _timelineClient: TimelineClient = _
   protected var historyService: YarnHistoryService = _
+  protected var sparkHistoryServer: HistoryServer = _
 
   protected val incomplete_flag = "&showIncomplete=true"
   protected val page1_flag = "&page=1"
@@ -260,6 +261,7 @@ abstract class AbstractHistoryIntegrationTests
   def webUITest(name: String, probe: (URL, YarnHistoryProvider) => Unit): Unit = {
     val (_, server, webUI, provider) = createHistoryServer(findPort())
     try {
+      sparkHistoryServer = server
       server.bind()
       describe(name)
       probe(webUI, provider)
@@ -268,6 +270,7 @@ abstract class AbstractHistoryIntegrationTests
       Utils.tryLogNonFatalError {
         server.stop()
       }
+      sparkHistoryServer = null
     }
   }
 
