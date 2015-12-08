@@ -776,7 +776,8 @@ private[spark] class YarnHistoryProvider(sparkConf: SparkConf)
         ui.getSecurityManager.setViewAcls(appListener.sparkUser.getOrElse("<Not Started>"),
           appListener.viewAcls.getOrElse(""))
         val latestState = toApplicationHistoryInfo(attemptEntity).attempts.head
-        val updateState = new YarnHistoryProviderUpdateState(latestState.version, latestState.lastUpdated)
+        val updateState = new YarnHistoryProviderUpdateState(latestState.version,
+          latestState.lastUpdated)
         Some(LoadedAppUI(ui, latestState.lastUpdated, Some(updateState)))
       } catch {
 
