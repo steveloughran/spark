@@ -27,7 +27,7 @@ import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.status.api.v1.{ApiRootResource, ApplicationInfo, ApplicationsListResource, UIRoot}
 import org.apache.spark.ui.{SparkUI, UIUtils, WebUI}
 import org.apache.spark.ui.JettyUtils._
-import org.apache.spark.util.{ShutdownHookManager, SignalLogger, SystemClock, Utils}
+import org.apache.spark.util.{ShutdownHookManager, SystemClock, Utils}
 
 /**
  * A web server that renders SparkUIs of completed applications.
@@ -164,20 +164,6 @@ class HistoryServer(
    */
   override def getAppUI(appId: String, attemptId: Option[String]): Option[LoadedAppUI] = {
     provider.getAppUI(appId, attemptId)
-  }
-
-  /**
-   * Relay checks for the update to the history provider, passing down the update state
-   * returned by the provider's `getAppUI` call previously.
-   * @param appId application ID
-   * @param attemptId optional attempt ID
-   * @param updateState state information needed by the provider to determine age
-   * @return true if the application was updated
-   */
-  override def isUpdated(appId: String,
-      attemptId: Option[String],
-      updateState: Option[HistoryProviderUpdateState]): Boolean = {
-    provider.isUpdated(appId, attemptId, updateState)
   }
 
   /**

@@ -94,14 +94,6 @@ The history server can be configured as follows:
     is the FsHistoryProvider, retrieves application logs stored in the file system.</td>
   </tr>
   <tr>
-    <td>spark.history.retainedApplications</td>
-    <td>50</td>
-    <td>
-      The number of application UIs to retain. If this cap is exceeded, then the oldest
-      applications will be removed.
-    </td>
-  </tr>
-  <tr>
     <td>spark.history.fs.logDirectory</td>
     <td>file:/tmp/spark-events</td>
     <td>
@@ -121,6 +113,22 @@ The history server can be configured as follows:
       As soon as an update has completed, listings of the completed and incomplete applications
       will reflect the changes. For performance reasons, the UIs of web applications are
       only updated at a slower interval, that defined in <code>spark.history.cache.window</code> 
+    </td>
+  </tr>
+  <tr>
+    <td>spark.history.retainedApplications</td>
+    <td>50</td>
+    <td>
+      The number of application UIs to retain. If this cap is exceeded, then the oldest
+      applications will be removed.
+    </td>
+  </tr>
+  <tr>
+    <td>spark.history.cache.window</td>
+    <td>60s</td>
+    <td>
+      Minimum time between checks for updates to incomplete web applications whose web
+      views have been loaded into the history server.
     </td>
   </tr>
   <tr>

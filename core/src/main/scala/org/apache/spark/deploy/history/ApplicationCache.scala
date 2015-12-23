@@ -18,7 +18,6 @@
 package org.apache.spark.deploy.history
 
 import java.util.NoSuchElementException
-
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import javax.servlet.{DispatcherType, Filter, FilterChain, FilterConfig, ServletException, ServletRequest, ServletResponse}
 
@@ -167,7 +166,7 @@ private[history] class ApplicationCache(
         log.debug(s"Probing @time $now for updated application $cacheKey -> $entry")
         metrics.updateProbeCount.inc()
         updated = time(metrics.updateProbeTimer) {
-          operations.isUpdated(appId, attemptId, entry.updateState)
+          entry.updateProbe.isUpdated()
         }
         if (updated) {
           logDebug(s"refreshing $cacheKey")
@@ -193,7 +192,7 @@ private[history] class ApplicationCache(
    */
   def lookupCacheEntry(appId: String, attemptId: Option[String]): CacheEntry = {
     val entry = lookupAndUpdate(appId, attemptId)._1
-    new CacheEntry(entry.ui, entry.completed, entry.updateState, entry.probeTime)
+    new CacheEntry(entry.ui, entry.completed, entry.updateProbe, entry.probeTime)
   }
 
   /**
@@ -338,12 +337,12 @@ private[history] class ApplicationCache(
 private[history] final class CacheEntry(
     val ui: SparkUI,
     val completed: Boolean,
-    val updateState: Option[HistoryProviderUpdateState],
+    val updateProbe: HistoryUpdateProbe,
     var probeTime: Long) {
 
   /** string value is for test assertions */
   override def toString: String = {
-    s"UI $ui, updateState=$updateState, completed=$completed, probeTime=$probeTime"
+    s"UI $ui, updateProbe=$updateProbe, completed=$completed, probeTime=$probeTime"
   }
 }
 
@@ -354,15 +353,6 @@ private[history] final class CacheEntry(
  * @param attemptId attempt ID
  */
 private[history] final case class CacheKey(appId: String, attemptId: Option[String]) {
-
-  override def hashCode(): Int = {
-    appId.hashCode() + attemptId.map(_.hashCode).getOrElse(0)
-  }
-
-  override def equals(obj: Any): Boolean = {
-    val that = obj.asInstanceOf[CacheKey]
-    that.appId == appId && that.attemptId == attemptId
-  }
 
   override def toString: String = {
     appId + attemptId.map { id => s"/$id" }.getOrElse("")
@@ -421,14 +411,13 @@ private[history] class CacheMetrics(prefix: String) extends Source {
 }
 
 /**
- * API for cache events. That is: loading an APP UI; probing for it changing, and for
+ * API for cache events. That is: loading an App UI; and for
  * attaching/detaching the UI to and from the Web UI.
  */
 private[history] trait ApplicationCacheOperations {
 
   /**
-   * Get the application UI and any information about its version/age which is needed
-   * in [[isUpdated()]] later.
+   * Get the application UI and the probe neededed to see if it has updated later.
    * @param appId application ID
    * @param attemptId attempt ID
    * @return If found, the Spark UI and any history information to be used in the cache
@@ -455,19 +444,6 @@ private[history] trait ApplicationCacheOperations {
    */
   def detachSparkUI(appId: String, attemptId: Option[String], ui: SparkUI): Unit
 
-  /**
-   * Probe for an update to an (incompleted) application.
-   * The [[HistoryProviderUpdateState]] instance/subclass provided in the
-   * [[getAppUI()]] call is passed down to help determine age.
-   * @param appId application ID
-   * @param attemptId optional attempt ID
-   * @param updateState any state implementation can use to determine age
-   * @return true if the application has been updated
-   */
-  def isUpdated(
-      appId: String,
-      attemptId: Option[String],
-      updateState: Option[HistoryProviderUpdateState]): Boolean
 }
 
 /**

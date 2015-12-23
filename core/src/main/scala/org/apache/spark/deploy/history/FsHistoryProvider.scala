@@ -19,7 +19,6 @@ package org.apache.spark.deploy.history
 
 import java.io.{BufferedInputStream, FileNotFoundException, InputStream, IOException, OutputStream}
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
@@ -55,12 +54,10 @@ import org.apache.spark.util.{Clock, SystemClock, ThreadUtils, Utils}
  * is created copying over all the original data, the current size, and an incremented version
  * counter. Accordingly, the fact the attempt is updated is detected, but there is no replay
  * cost.
- * - When [[isUpdated()]] is invoked to check if a loaded [[SparkUI]] instance is out of date,
- * the version counter of the application attempt loaded is compared with that attempt's current
- * value; the loaded UI is considered out of date if its counter is less than the current value.
- * -The value of the version counter at attempt load time is declared in the
- * [[FsHistoryProviderUpdateState]] instance returned in the [[getAppUI()]] call. The cache is
- * required to preserve this value and return it in then update probes.
+ * - When [[UpdateProbe.isUpdated()]] is invoked to check if a loaded [[SparkUI]]
+ * instance is out of date, the version counter of the application attempt loaded is
+ * compared with that attempt's current value; the loaded UI is considered out of date
+ * if its version is less than that of the current listing.
  *
  * The use of a version counter, rather than simply relying on modification times, is needed to
  * address the following issues
@@ -112,14 +109,6 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
   // to ignore logs that are older during subsequent scans, to avoid processing data that
   // is already known.
   private var lastScanTime = -1L
-
-  // a counter for attempts, used when creating an [[FsApplicationAttemptInfo]] instance
-  // to guarantee that the instance will have a higher attempt count than any instance
-  // describing the same attempt. To determine if an attempt is out of date, the two
-  // instance's counter fields can be checked. And, as the current attempt's counter
-  // value is included in the [[FsHistoryProviderUpdateState]], the version of the cached
-  // value can be be checked.
-  private val attemptCounter = new AtomicLong(0)
 
   // Mapping of application IDs to their metadata, in descending end time order. Apps are inserted
   // into the map in order, so the LinkedHashMap maintains the correct ordering.
@@ -264,8 +253,7 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
             ui.getSecurityManager.setAdminAcls(appListener.adminAcls.getOrElse(""))
             ui.getSecurityManager.setViewAcls(attempt.sparkUser,
               appListener.viewAcls.getOrElse(""))
-            LoadedAppUI(ui,
-              Some(new FsHistoryProviderUpdateState(attempt.version)))
+            LoadedAppUI(ui, new UpdateProbe(appId, attemptId, attempt.fileSize))
           }
         }
       }
@@ -457,8 +445,8 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
    * be lost.
    * @param newAttempts a possibly empty list of new attempts
    */
-  private def updateApplicationsWithNewAttempts(newAttempts: Iterable[FsApplicationAttemptInfo])
-    : Unit = {
+  private def updateApplicationsWithNewAttempts(
+      newAttempts: Iterable[FsApplicationAttemptInfo]): Unit = {
     if (newAttempts.nonEmpty) {
       applications = mergeAttempts(newAttempts, applications)
     }
@@ -473,7 +461,8 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
    * @param current the current attempt list
    * @return the updated list
    */
-  private def mergeAttempts(newAttempts: Iterable[FsApplicationAttemptInfo],
+  private def mergeAttempts(
+      newAttempts: Iterable[FsApplicationAttemptInfo],
       current: mutable.LinkedHashMap[String, FsApplicationHistoryInfo])
       : mutable.LinkedHashMap[String, FsApplicationHistoryInfo] = {
 
@@ -522,7 +511,7 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
 
 
   /**
-   * Scan through all known incomplete applications, and check for any that have been updated.
+   * Build list of incomplete apps that have been updated since they were last examined.
    *
    * After the scan, if there were any updated attempts, [[applications]] is updated
    * with the new values.
@@ -531,6 +520,8 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
    * 2. As this overwrites [[applications]] with a new value, it must not run concurrently
    * with the main scan for new applications. That is: it must be in the [[checkForLogs()]]
    * operation.
+   * 3. If an attempt's files are no longer present, the existing attempt is not considered
+   * out of date or otherwise modified.
    */
   private[history] def scanAndUpdateIncompleteAttemptInfo(): Unit = {
     val newAttempts: Iterable[FsApplicationAttemptInfo] = applications
@@ -547,7 +538,7 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
                 logDebug(s"Attempt ${prevInfo.name}/${prevInfo.appId} size => $size")
                 Some(new FsApplicationAttemptInfo(prevInfo.logPath, prevInfo.name, prevInfo.appId,
                   prevInfo.attemptId, prevInfo.startTime, prevInfo.endTime, prevInfo.lastUpdated,
-                  prevInfo.sparkUser, prevInfo.completed, size, attemptCounter.incrementAndGet()))
+                  prevInfo.sparkUser, prevInfo.completed, size))
               } else {
                 None
               }
@@ -686,8 +677,7 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
           getModificationTime(eventLog).get,
           appListener.sparkUser.getOrElse(NOT_STARTED),
           appCompleted,
-          getLogSize(eventLog).getOrElse(0),
-          attemptCounter.incrementAndGet()))
+          getLogSize(eventLog).getOrElse(0)))
       } else {
         None
       }
@@ -834,36 +824,31 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
   }
 
   /**
-   * Probe for an update to an (incompleted) application.
-   *
-   * @param appId application ID
-   * @param attemptId optional attempt ID
-   * @param state an [[FsHistoryProviderUpdateState]] instance
-   * @return true if the attempt has been updated.
+   * The update probe of the is the generational counter of attempts:
+   * if the filesize is less than that of the latest attempt's size, it is out of date.
+   * @param appId application to probe
+   * @param attemptId attempt to probe
+   * @param fileSize the file size of the last attempt's logs
    */
-  override def isUpdated(
+  private class UpdateProbe(
       appId: String,
       attemptId: Option[String],
-      state: Option[HistoryProviderUpdateState]): Boolean = {
-    val updateState = state.get.asInstanceOf[FsHistoryProviderUpdateState]
-    lookup(appId, attemptId) match {
-      case None =>
-        logDebug(s"Application Attempt $appId/$attemptId not found")
-        false
-      case Some(attempt) =>
-        updateState.version < attempt.version
+      fileSize: Long) extends HistoryUpdateProbe {
+
+    override def toString: String = {
+      s"UpdateProbe($appId/$attemptId @$fileSize)"
+    }
+
+    override def isUpdated(): Boolean = {
+      lookup(appId, attemptId) match {
+        case None =>
+          logDebug(s"Application Attempt $appId/$attemptId not found")
+          false
+        case Some(latest) =>
+          fileSize < latest.fileSize
+      }
     }
   }
-
-}
-
-/**
- * The update state of the FsHistoryProvider is the generational counter of attempts:
- * if the counter is less than that of the attempt's current value, it is out of date.
- * @param version the current attempt version value.
- */
-private class FsHistoryProviderUpdateState(val version: Long) extends HistoryProviderUpdateState {
-  override def toString: String = s"FsHistoryProviderUpdateState($version)"
 }
 
 private[history] object FsHistoryProvider {
@@ -890,8 +875,6 @@ private[history] object FsHistoryProvider {
  * @param sparkUser user running the application
  * @param completed predicate to indicate whether or not the application has completed.
  * @param fileSize the size of the log file the last time the file was scanned for changes
- * @param version a version counter incremented whenever a new attempt with a longer filesize
- *                is created.
  */
 private class FsApplicationAttemptInfo(
     val logPath: String,
@@ -903,15 +886,14 @@ private class FsApplicationAttemptInfo(
     lastUpdated: Long,
     sparkUser: String,
     completed: Boolean,
-    val fileSize: Long,
-    val version: Long)
+    val fileSize: Long)
   extends ApplicationAttemptInfo(attemptId, startTime, endTime,
     lastUpdated, sparkUser, completed) {
 
   /** extend the superclass string value with the extra attributes of this class */
   override def toString: String = {
     s"FsApplicationAttemptInfo($logPath, $name, $appId," +
-      s" ${super.toString}, $fileSize, $version"
+      s" ${super.toString}, $fileSize"
   }
 }
 
