@@ -632,7 +632,7 @@ private[spark] class Client(
   /**
    * Get the renewal interval for tokens.
    */
-  private def getTokenRenewalInterval(stagingDirPath: Path): Long = {
+  private def getTokenRenewalInterval(stagingDirPath: Path): Option[Long] = {
     // We cannot use the tokens generated above since those have renewer yarn. Trying to renew
     // those will fail with an access control issue. So create new tokens with the logged in
     // user as renewer.
@@ -640,15 +640,19 @@ private[spark] class Client(
     val nns = YarnSparkHadoopUtil.get.getNameNodesToAccess(sparkConf) + stagingDirPath
     YarnSparkHadoopUtil.get.obtainTokensForNamenodes(
       nns, hadoopConf, creds, sparkConf.get(PRINCIPAL))
-    val t = creds.getAllTokens.asScala
-      .filter(_.getKind == DelegationTokenIdentifier.HDFS_DELEGATION_KIND)
-      .head
-    val newExpiration = t.renew(hadoopConf)
-    val identifier = new DelegationTokenIdentifier()
-    identifier.readFields(new DataInputStream(new ByteArrayInputStream(t.getIdentifier)))
-    val interval = newExpiration - identifier.getIssueDate
-    logInfo(s"Renewal Interval set to $interval")
-    interval
+    val hdfsTokens = creds.getAllTokens.asScala
+        .filter(_.getKind == DelegationTokenIdentifier.HDFS_DELEGATION_KIND)
+    if (hdfsTokens.nonEmpty) {
+      val t = hdfsTokens.head
+      val newExpiration = t.renew(hadoopConf)
+      val identifier = new DelegationTokenIdentifier()
+      identifier.readFields(new DataInputStream(new ByteArrayInputStream(t.getIdentifier)))
+      val interval = newExpiration - identifier.getIssueDate
+      logInfo(s"Renewal Interval set to $interval")
+      Some(interval)
+    } else {
+      None
+    }
   }
 
   /**
@@ -669,8 +673,9 @@ private[spark] class Client(
       val credentialsFile = "credentials-" + UUID.randomUUID().toString
       sparkConf.set(CREDENTIALS_FILE_PATH, new Path(stagingDirPath, credentialsFile).toString)
       logInfo(s"Credentials file set to: $credentialsFile")
-      val renewalInterval = getTokenRenewalInterval(stagingDirPath)
-      sparkConf.set(TOKEN_RENEWAL_INTERVAL, renewalInterval)
+      getTokenRenewalInterval(stagingDirPath).foreach {
+        sparkConf.set(TOKEN_RENEWAL_INTERVAL, _)
+      }
     }
 
     // Pick up any environment variables for the AM provided through spark.yarn.appMasterEnv.*
