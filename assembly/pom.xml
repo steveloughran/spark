@@ -216,5 +216,59 @@
         <parquet.deps.scope>provided</parquet.deps.scope>
       </properties>
     </profile>
+
+    <!--
+     The 2.6+ hadoop profiles pull in spark-cloud but not any artifacts from cloud providers.
+     There's no need to tune those exclusions between hadoop 2.6 and later; what's important
+     is to keep them all out of the assembly.
+    -->
+    <profile>
+      <id>hadoop-2.6</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>spark-cloud_${scala.binary.version}</artifactId>
+          <version>${project.version}</version>
+          <exclusions>
+            <exclusion>
+              <groupId>com.amazonaws</groupId>
+              <artifactId>aws-java-sdk-s3</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.amazonaws</groupId>
+              <artifactId>aws-java-sdk</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.microsoft.azure</groupId>
+              <artifactId>azure-storage</artifactId>
+            </exclusion>
+          </exclusions>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>hadoop-2.7</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>spark-cloud_${scala.binary.version}</artifactId>
+          <version>${project.version}</version>
+          <exclusions>
+            <exclusion>
+              <groupId>com.amazonaws</groupId>
+              <artifactId>aws-java-sdk-s3</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.amazonaws</groupId>
+              <artifactId>aws-java-sdk</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.microsoft.azure</groupId>
+              <artifactId>azure-storage</artifactId>
+            </exclusion>
+          </exclusions>
+        </dependency>
+      </dependencies>
+    </profile>
   </profiles>
 </project>
