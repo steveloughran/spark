@@ -225,6 +225,9 @@
     <PermGen>64m</PermGen>
     <MaxPermGen>512m</MaxPermGen>
     <CodeCacheSize>512m</CodeCacheSize>
+    <!-- override point: Hadoop XML file containing (directly or via XInclude references)
+    the credentials needed to test against target cloud infrastructures. -->
+    <cloud.test.configuration.file>(unset)</cloud.test.configuration.file>
   </properties>
   <repositories>
     <repository>
@@ -2046,6 +2049,8 @@
               <spark.unsafe.exceptionOnMemoryLeak>true</spark.unsafe.exceptionOnMemoryLeak>
               <!-- Needed by sql/hive tests. -->
               <test.src.tables>__not_used__</test.src.tables>
+              <!-- optionally set for cloud infrastructure tests -->
+              <cloud.test.configuration.file>${cloud.test.configuration.file}</cloud.test.configuration.file>
             </systemProperties>
             <tagsToExclude>${test.exclude.tags}</tagsToExclude>
           </configuration>
