@@ -18,26 +18,95 @@
 package org.apache.spark.cloud
 
 import java.io.{File, FileNotFoundException}
+import java.net.URI
+
+import scala.collection.JavaConverters._
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, LocalFileSystem, Path}
 import org.scalatest.{BeforeAndAfter, Matchers}
 
-import org.apache.spark.{LocalSparkContext, SparkFunSuite}
+import org.apache.spark.{LocalSparkContext, SparkConf, SparkFunSuite}
 
+/**
+ * A cloud suite.
+ * Adds automatic loading of a Hadoop configuration file with login credentials and
+ * options to enable/disable tests, and a mechanism to conditionally declare tests
+ * based on these details
+ */
 class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
     with BeforeAndAfter with Matchers {
 
-  val conf = loadConfiguration()
+  protected val conf = loadConfiguration()
 
-  def enabled: Boolean = conf != null
+  private var _filesystem: Option[FileSystem] = None
+  protected def filesystem: Option[FileSystem] = _filesystem
 
-  def loadConfiguration(): Configuration = {
+  /**
+   * Update the filesystem; includes a validity check to ensure that the local filesystem
+   * is never accidentally picked up.
+   * @param fs new filesystem
+   */
+  protected def setFilesystem(fs: FileSystem): Unit = {
+      if (fs.isInstanceOf[LocalFileSystem] || "file" == fs.getScheme) {
+        throw new IllegalArgumentException("Test filesystem cannot be local filesystem")
+    }
+    _filesystem = Some(fs)
+  }
+
+  /**
+   * Create a filesystem. This adds it as the `filesystem` field.
+   * @param fsURI filesystem URI
+   * @return the newly create FS.
+   */
+  protected def createFilesystem(fsURI: URI): FileSystem = {
+    val fs = FileSystem.get(fsURI, conf)
+    setFilesystem(fs)
+    fs
+  }
+
+  /**
+   * Clean up the filesystem if it is defined.
+   */
+  protected def cleanFilesystem(): Unit = {
+    // sanity check: reject anything looking like a local FS
+    filesystem.foreach { fs =>
+      note(s"Cleaning filesystem $fs")
+      fs.delete(new Path("/"), true)
+    }
+  }
+
+  /**
+   * Teardown-time cleanup; exceptions are logged
+   */
+  protected def cleanFilesystemInTeardown(): Unit = {
+    try {
+      cleanFilesystem()
+    } catch {
+      case e: Exception =>
+        logInfo("During cleanup of filesystem: $e", e)
+    }
+  }
+
+
+
+  /**
+   * Enabled flag.
+   * The base class is enabled if the configuration file loaded; subclasses can extend
+   * this with extra probes.
+   *
+   * If this predicate is false, then tests defined in `ctest()` will be ignored
+   * @return true if the test suite is enabled.
+   */
+  protected def enabled: Boolean = conf != null
+
+  protected def loadConfiguration(): Configuration = {
     val filename = System.getProperty(CLOUD_TEST_CONFIGURATION_FILE, "")
     logDebug(s"Configuration property = `$filename`")
     if (filename != null && !filename.isEmpty && !CLOUD_TEST_UNSET_STRING.equals(filename)) {
       val f = new File(filename)
       if (f.exists()) {
-        logDebug(s"Loading configuration from $f")
+        logInfo(s"Loading configuration from $f")
         val c = new Configuration(false)
         c.addResource(f.toURI.toURL)
         c
@@ -51,15 +120,39 @@ class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
   }
 
   /**
+   * Get a required option; throw an exception if the key is missing
+   * or an empty string.
+   * @param key the key to look up
+   * @return the trimmed string value.
+   */
+  protected def requiredOption(key: String): String = {
+    val v = conf.getTrimmed(key)
+    require(v!=null && !v.isEmpty, s"Unset/empty configuration option $key")
+    v
+  }
+
+  /**
+   * Create a spark conf. All options loaded from the test configuration
+   * XML file will be added as hadoop options
+   * @return
+   */
+  def newSparkConf(): SparkConf = {
+    val sc = new SparkConf(false)
+    conf.asScala.foreach { e =>
+      sc.set("spark.hadoop." + e.getKey, e.getValue)
+    }
+    sc
+  }
+  /**
    * A conditional test which is only executed when the suite is enabled
    * @param testText description of the text
    * @param testFun function to evaluate
    */
-  def ctest(testText: String)(testFun: => Unit): Unit = {
+  protected def ctest(testText: String)(testFun: => Unit): Unit = {
     if (enabled) {
-      registerTest(testText) {testFun}
+      registerTest(testText) { testFun }
     } else {
-      registerIgnoredTest(testText) {testFun}
+      registerIgnoredTest(testText) { testFun }
     }
   }
 

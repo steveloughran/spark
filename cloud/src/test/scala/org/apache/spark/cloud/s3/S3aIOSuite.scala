@@ -17,13 +17,45 @@
 
 package org.apache.spark.cloud.s3
 
+import java.net.URI
+
+import org.apache.hadoop.fs.Path
+
 import org.apache.spark.cloud.CloudSuite
 
 class S3aIOSuite extends CloudSuite {
 
   override def enabled: Boolean = super.enabled && conf.getBoolean(AWS_TESTS_ENABLED, false)
 
+  init()
+
+  def init(): Unit = {
+    // propagate S3 credentials
+    if (enabled) {
+      val id = requiredOption(AWS_ACCOUNT_ID)
+      val secret = requiredOption(AWS_ACCOUNT_SECRET)
+      conf.set("fs.s3n.awsAccessKeyId", id)
+      conf.set("fs.s3n.awsSecretAccessKey", secret)
+      val s3aURI = new URI(requiredOption(S3_TEST_URI))
+      logInfo(s"Executing S3 tests against $s3aURI")
+      createFilesystem(s3aURI)
+    }
+  }
+
+  after {
+    cleanFilesystemInTeardown()
+  }
+
+
   ctest("Hello") {
-    info("hello")
+
+  }
+
+  ctest("Raw touch") {
+    val fs = filesystem.get
+    val path = new Path("/test")
+    fs.mkdirs(path)
+    fs.getFileStatus(path)
+    fs.delete(path, true)
   }
 }

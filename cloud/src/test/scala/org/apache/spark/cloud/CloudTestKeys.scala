@@ -17,6 +17,8 @@
 
 package org.apache.spark.cloud
 
+import org.apache.hadoop.fs.s3a.Constants
+
 /**
  * The various test keys for the cloud tests.
  *
@@ -64,17 +66,17 @@ trait CloudTestKeys {
   /**
    * Amazon Web Services Account
    */
-  val AWS_ACCOUNT_ID = "aws.account.id"
+  val AWS_ACCOUNT_ID = Constants.ACCESS_KEY
 
   /**
-   * Amazon Web Services account key.
-   * This is the key which must be reset if it is ever leaked. The tests *must not* log
+   * Amazon Web Services account secret.
+   * This is the value which must be reset if it is ever leaked. The tests *must not* log
    * this to any output.
    */
-  val AWS_ACCOUNT_KEY = "aws.account.key"
+  val AWS_ACCOUNT_SECRET = Constants.SECRET_KEY
 
   /**
    * A test bucket for S3. All data in this bucket will be deleted during test suite teardowns;
    */
-  val S3_TEST_BUCKET = "s3.test.bucket"
+  val S3_TEST_URI = "s3a.test.uri"
 }
