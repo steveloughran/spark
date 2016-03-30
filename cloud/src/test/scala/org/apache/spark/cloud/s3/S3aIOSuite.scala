@@ -66,6 +66,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
   ctest("Generate then Read data") {
     sc = new SparkContext("local", "test", newSparkConf())
     val numbers = sc.parallelize(1 to 1000)
-    numbers.saveAsTextFile(new Path(TestDir, "example.txt").toString)
+    val path = new Path(TestDir, "example.txt")
+    numbers.saveAsTextFile(path.toString)
   }
 }

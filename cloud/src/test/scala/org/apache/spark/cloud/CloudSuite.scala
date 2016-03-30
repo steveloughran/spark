@@ -23,7 +23,7 @@ import java.net.URI
 import scala.collection.JavaConverters._
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{CommonConfigurationKeys, CommonConfigurationKeysPublic, FileSystem, LocalFileSystem, Path}
+import org.apache.hadoop.fs.{CommonConfigurationKeys, CommonConfigurationKeysPublic, FSDataInputStream, FileSystem, LocalFileSystem, Path}
 import org.scalatest.{BeforeAndAfter, Matchers}
 
 import org.apache.spark.{LocalSparkContext, SparkConf, SparkFunSuite}
@@ -174,4 +174,14 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     }
   }
 
+  def readBytesToString(fs: FileSystem, path: Path, length: Int) : String {
+    val in = fs.open(path)
+    try {
+      val buf = new Array[Byte](length)
+      in.readFully(0, buf)
+      return toChar(buf)
+    } finally {
+      in.close
+    }
+  }
 }
