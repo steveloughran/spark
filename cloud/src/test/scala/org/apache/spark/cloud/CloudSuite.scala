@@ -37,6 +37,12 @@ import org.apache.spark.{LocalSparkContext, SparkConf, SparkFunSuite}
 class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
     with BeforeAndAfter with Matchers {
 
+  /**
+   *  Work under a test directory, so that cleanup works.
+   * ...some of the object stores don't implement `delete("/",true)`
+   */
+  protected val TestDir = new Path("/test")
+
   protected val conf = loadConfiguration()
 
   private var _filesystem: Option[FileSystem] = None
@@ -71,8 +77,8 @@ class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
   protected def cleanFilesystem(): Unit = {
     // sanity check: reject anything looking like a local FS
     filesystem.foreach { fs =>
-      note(s"Cleaning filesystem $fs")
-      fs.delete(new Path("/"), true)
+      note(s"Cleaning filesystem ${fs.getUri}")
+      fs.delete(TestDir, true)
     }
   }
 

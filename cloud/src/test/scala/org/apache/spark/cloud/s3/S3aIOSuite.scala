@@ -17,6 +17,7 @@
 
 package org.apache.spark.cloud.s3
 
+import java.io.FileNotFoundException
 import java.net.URI
 
 import org.apache.hadoop.fs.Path
@@ -46,16 +47,17 @@ class S3aIOSuite extends CloudSuite {
     cleanFilesystemInTeardown()
   }
 
-
-  ctest("Hello") {
-
-  }
-
   ctest("Raw touch") {
     val fs = filesystem.get
-    val path = new Path("/test")
+    val path = TestDir
     fs.mkdirs(path)
-    fs.getFileStatus(path)
+    val st = fs.getFileStatus(path)
+    logInfo(s"Created filesystem entry $path: $st")
     fs.delete(path, true)
+    intercept[FileNotFoundException] {
+      val st2 = fs.getFileStatus(path)
+      logError(s"Got status $st2")
+    }
+
   }
 }
