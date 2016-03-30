@@ -2570,6 +2570,9 @@
           </dependency>
         </dependencies>
       </dependencyManagement>
+      <modules>
+        <module>cloud</module>
+      </modules>
     </profile>
 
     <profile>
@@ -2642,6 +2645,9 @@
           </dependency>
         </dependencies>
       </dependencyManagement>
+      <modules>
+        <module>cloud</module>
+      </modules>
     </profile>
 
     <profile>

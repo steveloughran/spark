@@ -46,7 +46,7 @@ import org.apache.hadoop.fs.s3a.Constants
  *</configuration>
  * ```
  */
-trait CloudTestKeys {
+private[spark] trait CloudTestKeys {
 
   val CLOUD_TEST_CONFIGURATION_FILE = "cloud.test.configuration.file"
 

@@ -29,7 +29,7 @@ import org.apache.spark.SparkFunSuite
  * Dependency problems should be picked up at compile time; runtime may
  * identify problems with any other transitive library
  */
-class DependencyCheckSuite extends SparkFunSuite {
+private[spark] class DependencyCheckSuite extends SparkFunSuite {
 
   test("Create Jets3t class") {
     new S3ServiceException("jets3t")

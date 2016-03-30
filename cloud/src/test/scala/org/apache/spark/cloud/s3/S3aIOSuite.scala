@@ -21,10 +21,12 @@ import java.io.FileNotFoundException
 import java.net.URI
 
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.s3a.Constants
 
+import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
 
-class S3aIOSuite extends CloudSuite {
+private[spark] class S3aIOSuite extends CloudSuite {
 
   override def enabled: Boolean = super.enabled && conf.getBoolean(AWS_TESTS_ENABLED, false)
 
@@ -37,6 +39,7 @@ class S3aIOSuite extends CloudSuite {
       val secret = requiredOption(AWS_ACCOUNT_SECRET)
       conf.set("fs.s3n.awsAccessKeyId", id)
       conf.set("fs.s3n.awsSecretAccessKey", secret)
+      conf.set(Constants.BUFFER_DIR, localTmpDir.getAbsolutePath)
       val s3aURI = new URI(requiredOption(S3_TEST_URI))
       logInfo(s"Executing S3 tests against $s3aURI")
       createFilesystem(s3aURI)
@@ -47,7 +50,7 @@ class S3aIOSuite extends CloudSuite {
     cleanFilesystemInTeardown()
   }
 
-  ctest("Raw touch") {
+  ctest("Create, delete directory") {
     val fs = filesystem.get
     val path = TestDir
     fs.mkdirs(path)
@@ -58,6 +61,11 @@ class S3aIOSuite extends CloudSuite {
       val st2 = fs.getFileStatus(path)
       logError(s"Got status $st2")
     }
+  }
 
+  ctest("Generate then Read data") {
+    sc = new SparkContext("local", "test", newSparkConf())
+    val numbers = sc.parallelize(1 to 1000)
+    numbers.saveAsTextFile(new Path(TestDir, "example.txt").toString)
   }
 }

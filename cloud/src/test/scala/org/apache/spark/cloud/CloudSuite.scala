@@ -23,7 +23,7 @@ import java.net.URI
 import scala.collection.JavaConverters._
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, LocalFileSystem, Path}
+import org.apache.hadoop.fs.{CommonConfigurationKeys, CommonConfigurationKeysPublic, FileSystem, LocalFileSystem, Path}
 import org.scalatest.{BeforeAndAfter, Matchers}
 
 import org.apache.spark.{LocalSparkContext, SparkConf, SparkFunSuite}
@@ -34,7 +34,7 @@ import org.apache.spark.{LocalSparkContext, SparkConf, SparkFunSuite}
  * options to enable/disable tests, and a mechanism to conditionally declare tests
  * based on these details
  */
-class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
+private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
     with BeforeAndAfter with Matchers {
 
   /**
@@ -47,6 +47,10 @@ class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
 
   private var _filesystem: Option[FileSystem] = None
   protected def filesystem: Option[FileSystem] = _filesystem
+  protected def fsURI = _filesystem.get.getUri
+  /** this system property is always set in a JVM */
+  protected val localTmpDir = new File(System.getProperty("java.io.tmpdir", "/tmp"))
+      .getCanonicalFile
 
   /**
    * Update the filesystem; includes a validity check to ensure that the local filesystem
@@ -77,13 +81,15 @@ class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
   protected def cleanFilesystem(): Unit = {
     // sanity check: reject anything looking like a local FS
     filesystem.foreach { fs =>
-      note(s"Cleaning filesystem ${fs.getUri}")
-      fs.delete(TestDir, true)
+      note(s"Cleaning ${fs.getUri}$TestDir")
+      if (!fs.delete(TestDir, true)) {
+        logWarning(s"Deleting ${fs.getUri}$TestDir returned false")
+      }
     }
   }
 
   /**
-   * Teardown-time cleanup; exceptions are logged
+   * Teardown-time cleanup; exceptions are logged and not forwarded
    */
   protected def cleanFilesystemInTeardown(): Unit = {
     try {
@@ -143,12 +149,18 @@ class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
    * @return
    */
   def newSparkConf(): SparkConf = {
+    require(filesystem.isDefined, "Not bonded to a test filesystem")
     val sc = new SparkConf(false)
-    conf.asScala.foreach { e =>
-      sc.set("spark.hadoop." + e.getKey, e.getValue)
+    def hconf(k: String, v: String) = {
+      sc.set("spark.hadoop." + k, v)
     }
+    conf.asScala.foreach { e =>
+      hconf(e.getKey, e.getValue)
+    }
+    hconf(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY, fsURI.toString)
     sc
   }
+
   /**
    * A conditional test which is only executed when the suite is enabled
    * @param testText description of the text
