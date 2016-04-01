@@ -151,12 +151,23 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
   }
 
   /**
-   * Create a spark conf. All options loaded from the test configuration
+   * Create a spark conf, using the current filesystem as the URI for the default FS.
+   * All options loaded from the test configuration
    * XML file will be added as hadoop options
-   * @return
+   * @return the configuration
    */
   def newSparkConf(): SparkConf = {
     require(filesystem.isDefined, "Not bonded to a test filesystem")
+    newSparkConf(fsURI)
+  }
+
+  /**
+   * Create a spark conf. All options loaded from the test configuration
+   * XML file will be added as hadoop options
+   * @param uri the URI of the default filesystem
+   * @return the configuration
+   */
+  def newSparkConf(uri: URI): SparkConf = {
     val sc = new SparkConf(false)
     def hconf(k: String, v: String) = {
       sc.set("spark.hadoop." + k, v)
@@ -164,8 +175,12 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     conf.asScala.foreach { e =>
       hconf(e.getKey, e.getValue)
     }
-    hconf(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY, fsURI.toString)
+    hconf(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY, uri.toString)
     sc
+  }
+
+  def newSparkConf(path: Path): SparkConf = {
+    newSparkConf(path.getFileSystem(conf).getUri)
   }
 
   /**

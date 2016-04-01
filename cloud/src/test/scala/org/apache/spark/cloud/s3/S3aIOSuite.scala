@@ -26,8 +26,6 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FileStatus, FileSystem, Path}
 import org.apache.hadoop.fs.s3a.Constants
 import org.apache.hadoop.io.{NullWritable, Text}
-import org.apache.hadoop.mapred.TextOutputFormat
-import org.apache.hadoop.mapreduce.{Job => NewAPIHadoopJob, OutputFormat => NewOutputFormat, RecordWriter => NewRecordWriter, TaskAttemptID, TaskType}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
@@ -36,6 +34,9 @@ import org.apache.spark.rdd.RDD
 private[spark] class S3aIOSuite extends CloudSuite {
 
 
+  val SceneListGZ = new Path("s3a://landsat-pds/scene_list.gz")
+  /** number of lines, from `gunzip` + `wc -l` */
+  val ExpectedSceneListLines = 447919
 
   override def enabled: Boolean = super.enabled && conf.getBoolean(AWS_TESTS_ENABLED, false)
 
@@ -73,9 +74,12 @@ private[spark] class S3aIOSuite extends CloudSuite {
   }
 
   def stat(path: Path): FileStatus = {
-    filesystem.get.getFileStatus(path)
+    getFS(path).getFileStatus(path)
   }
 
+  def getFS(path: Path): FileSystem = {
+    FileSystem.get(path.toUri, conf)
+  }
 
   ctest("Generate then Read data -File Output Committer") {
     sc = new SparkContext("local", "test", newSparkConf())
@@ -113,8 +117,8 @@ private[spark] class S3aIOSuite extends CloudSuite {
     val numbers = sc.parallelize(1 to entryCount)
     val example1 = new Path(TestDir, "example1")
     saveAsTextFile(numbers, example1, conf)
-
   }
+
 
   /**
    * Save this RDD as a text file, using string representations of elements.
@@ -140,14 +144,93 @@ private[spark] class S3aIOSuite extends CloudSuite {
       confWithTargetFS.set(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY,
         pathFS.getUri.toString)
       val pairOps = RDD.rddToPairRDDFunctions(r)(nullWritableClassTag, textClassTag, null)
-      val job = NewAPIHadoopJob.getInstance(conf)
-      job.setOutputKeyClass(pairOps.keyClass)
-      job.setOutputValueClass(pairOps.valueClass)
-      job.setOutputFormatClass(
-        classOf[org.apache.hadoop.mapreduce.lib.output.TextOutputFormat[NullWritable, Text]])
-      val jobConfiguration = job.getConfiguration
-      jobConfiguration.set("mapred.output.dir", path.toUri.toString)
-      pairOps.saveAsNewAPIHadoopDataset(jobConfiguration)
+      pairOps.saveAsNewAPIHadoopFile(path.toUri.toString,
+        pairOps.keyClass, pairOps.valueClass,
+        classOf[org.apache.hadoop.mapreduce.lib.output.TextOutputFormat[NullWritable, Text]],
+        confWithTargetFS)
+    }
+  }
+
+  ctest("Read compressed CSV") {
+    val source = SceneListGZ
+    sc = new SparkContext("local", "test", newSparkConf(source))
+    val sceneInfo = stat(source)
+    logInfo(s"Compressed size = ${sceneInfo.getLen}")
+    val input = sc.textFile(source.toString)
+    val count = input.count()
+    logInfo(s" size of $source = $count rows")
+    assert(ExpectedSceneListLines === count, s"Number of rows in $source")
+  }
+
+  ctest("Read compressed CSV differentFS") {
+    sc = new SparkContext("local", "test", newSparkConf())
+    val source = SceneListGZ
+    val input = sc.textFile(source.toString)
+    val count = input.count()
+    logInfo(s" size of $source = $count rows")
+    assert(ExpectedSceneListLines === count, s"Number of rows in $source")
+  }
+
+  /**
+   * Assess cost of seek and read operations.
+   * When moving the cursor in an input stream, an HTTP connection may be closed and
+   * then re-opened. This can be very expensive; tactics like streaming forwards instead
+   * of seeking, and/or postponing movement until the following read ("lazy seek") try
+   * to address this. Logging these operation times helps track performance.
+   * This test also tries to catch out a regression, where a `close()` operation
+   * is implemented through reading through the entire input stream. This is exhibited
+   * in the time to close() while at offset 0 being O(len(file)).
+   */
+  ctest("Cost of seek and close") {
+    sc = new SparkContext("local", "test", newSparkConf())
+    val source = SceneListGZ
+    val fs = getFS(source)
+    val st = duration("stat") {
+      fs.getFileStatus(source)
+    }
+    val out = duration("open") {
+      fs.open(source)
+    }
+    duration("read[0]") {
+      assert(-1 !== out.read())
+    }
+    duration("seek[EOF-2]") {
+      out.seek(st.getLen - 2)
+    }
+    duration("read[EOF-2]") {
+      assert(-1 !== out.read())
+    }
+    duration("read[1]") {
+      val bytes = new Array[Byte](64)
+      assert(-1 !== out.readFully(1L, bytes))
+    }
+    duration("seek[256]") {
+      out.seek(256)
+    }
+    duration("read[256]") {
+      assert(-1 !== out.read())
+    }
+    duration("close()") {
+      out.close
+    }
+
+
+  }
+
+  /**
+   * Measure the duration of an operation, log it
+   * @param operation operation description
+   * @param testFun function to execute
+   * @return time in milliseconds
+   */
+  def duration[T](operation: String)(testFun: => T): T = {
+    val start = System.currentTimeMillis()
+    try {
+      testFun
+    } finally {
+      val end = System.currentTimeMillis()
+      val d = end - start
+      logInfo(s"Duration of $operation = $d millis")
     }
   }
 }
