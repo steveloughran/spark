@@ -74,7 +74,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
   }
 
   def stat(path: Path): FileStatus = {
-    getFS(path).getFileStatus(path)
+    filesystem.get.getFileStatus(path)
   }
 
   def getFS(path: Path): FileSystem = {
@@ -154,7 +154,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
   ctest("Read compressed CSV") {
     val source = SceneListGZ
     sc = new SparkContext("local", "test", newSparkConf(source))
-    val sceneInfo = stat(source)
+    val sceneInfo = getFS(source).getFileStatus(source)
     logInfo(s"Compressed size = ${sceneInfo.getLen}")
     val input = sc.textFile(source.toString)
     val count = input.count()
@@ -200,8 +200,12 @@ private[spark] class S3aIOSuite extends CloudSuite {
     duration("read[EOF-2]") {
       assert(-1 !== out.read())
     }
-    duration("read[1]") {
-      val bytes = new Array[Byte](64)
+    duration("readFully[1, byte[1]]") {
+      val bytes = new Array[Byte](1)
+      assert(-1 !== out.readFully(1L, bytes))
+    }
+    duration("readFully[1, byte[1024]]") {
+      val bytes = new Array[Byte](1024)
       assert(-1 !== out.readFully(1L, bytes))
     }
     duration("seek[256]") {
