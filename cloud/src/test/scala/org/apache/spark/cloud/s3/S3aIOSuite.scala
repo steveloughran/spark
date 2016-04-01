@@ -20,7 +20,7 @@ package org.apache.spark.cloud.s3
 import java.io.FileNotFoundException
 import java.net.URI
 
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FileStatus, Path}
 import org.apache.hadoop.fs.s3a.Constants
 
 import org.apache.spark.SparkContext
@@ -54,19 +54,43 @@ private[spark] class S3aIOSuite extends CloudSuite {
     val fs = filesystem.get
     val path = TestDir
     fs.mkdirs(path)
-    val st = fs.getFileStatus(path)
+    val st = stat(path)
     logInfo(s"Created filesystem entry $path: $st")
     fs.delete(path, true)
     intercept[FileNotFoundException] {
-      val st2 = fs.getFileStatus(path)
+      val st2 = stat(path)
       logError(s"Got status $st2")
     }
   }
 
-  ctest("Generate then Read data") {
+  def stat(path: Path): FileStatus = {
+    filesystem.get.getFileStatus(path)
+  }
+
+  ctest("Generate then Read data -File Output Committer") {
     sc = new SparkContext("local", "test", newSparkConf())
+    val conf = sc.hadoopConfiguration
+    assert(fsURI.toString === conf.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY))
     val numbers = sc.parallelize(1 to 1000)
-    val path = new Path(TestDir, "example.txt")
-    numbers.saveAsTextFile(path.toString)
+    val example1 = new Path(TestDir, "example1")
+    numbers.saveAsTextFile(example1.toString)
+    val st = stat(example1)
+    assert(st.isDirectory, s"Not a dir: $st")
+    val fs = filesystem.get
+    val children = fs.listStatus(example1)
+    assert(children.nonEmpty, s"No children under $example1")
+    children.foreach { child =>
+      logInfo(s"$child")
+      assert(child.getLen > 0 || child.getPath.getName === "_SUCCESS",
+        s"empty output $child")
+    }
+    val parts = children.flatMap { child =>
+      if (child.getLen > 0) Seq(child) else Nil
+    }
+    assert(parts.length === 1)
+    val parts0 = parts(0)
+    // now read it in
+    val input = sc.textFile(parts0.getPath.toString)
+    input.collect()
   }
 }

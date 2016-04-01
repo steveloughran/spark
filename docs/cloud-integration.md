@@ -51,8 +51,9 @@ Because of these behaviours, committing of work by renaming directories is neith
 reliable. There is a special output committer for Parquet, the `org.apache.spark.sql.execution.datasources.parquet.DirectParquetOutputCommitter`
 which bypasses the rename phase.
 
-*Important* speculative committing of output does not work against object
-stores which do not support atomic directory renames.
+*Critical* speculative execution does not work against object
+stores which do not support atomic directory renames. Your output may get
+corrupted
 
 ### Data is not written until the output stream's `close()` operation.
 

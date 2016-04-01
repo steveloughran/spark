@@ -26,7 +26,7 @@
 
   <artifactId>spark-cloud_2.11</artifactId>
   <packaging>jar</packaging>
-  <name>Spark Project cloud integration</name>
+  <name>Spark Project Cloud Integration</name>
   <description>Contains support for cloud infrastructures, including the Hadoop JARs and
     transitive dependencies needed to interact with the infrastructures.
     When included in the spark-assembly JAR, the hadoop artifacts are included, but not
