@@ -123,7 +123,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
    * rather than the default one in the configuration ... this is addressed by creating a
    * new configuration
    */
-  def saveAsTextFile[T](rdd: RDD[T], path: Path, conf: Configuration)(implicit fm: ClassTag[T])
+  def saveAsTextFile[T](rdd: RDD[T], path: Path, conf: Configuration)
   : Unit = {
     rdd.withScope {
       val nullWritableClassTag = implicitly[ClassTag[NullWritable]]
@@ -143,7 +143,8 @@ private[spark] class S3aIOSuite extends CloudSuite {
       val job = NewAPIHadoopJob.getInstance(conf)
       job.setOutputKeyClass(pairOps.keyClass)
       job.setOutputValueClass(pairOps.valueClass)
-      job.setOutputFormatClass(TextOutputFormat[NullWritable, Text].getClass)
+      job.setOutputFormatClass(
+        classOf[org.apache.hadoop.mapreduce.lib.output.TextOutputFormat[NullWritable, Text]])
       val jobConfiguration = job.getConfiguration
       jobConfiguration.set("mapred.output.dir", path.toUri.toString)
       pairOps.saveAsNewAPIHadoopDataset(jobConfiguration)
