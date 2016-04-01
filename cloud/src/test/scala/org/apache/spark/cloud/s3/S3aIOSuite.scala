@@ -20,13 +20,22 @@ package org.apache.spark.cloud.s3
 import java.io.FileNotFoundException
 import java.net.URI
 
-import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FileStatus, Path}
+import scala.reflect.ClassTag
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FileStatus, FileSystem, Path}
 import org.apache.hadoop.fs.s3a.Constants
+import org.apache.hadoop.io.{NullWritable, Text}
+import org.apache.hadoop.mapred.TextOutputFormat
+import org.apache.hadoop.mapreduce.{Job => NewAPIHadoopJob, OutputFormat => NewOutputFormat, RecordWriter => NewRecordWriter, TaskAttemptID, TaskType}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
+import org.apache.spark.rdd.RDD
 
 private[spark] class S3aIOSuite extends CloudSuite {
+
+
 
   override def enabled: Boolean = super.enabled && conf.getBoolean(AWS_TESTS_ENABLED, false)
 
@@ -67,11 +76,13 @@ private[spark] class S3aIOSuite extends CloudSuite {
     filesystem.get.getFileStatus(path)
   }
 
+
   ctest("Generate then Read data -File Output Committer") {
     sc = new SparkContext("local", "test", newSparkConf())
     val conf = sc.hadoopConfiguration
     assert(fsURI.toString === conf.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY))
-    val numbers = sc.parallelize(1 to 1000)
+    val entryCount = testEntryCount
+    val numbers = sc.parallelize(1 to entryCount)
     val example1 = new Path(TestDir, "example1")
     numbers.saveAsTextFile(example1.toString)
     val st = stat(example1)
@@ -91,6 +102,51 @@ private[spark] class S3aIOSuite extends CloudSuite {
     val parts0 = parts(0)
     // now read it in
     val input = sc.textFile(parts0.getPath.toString)
-    input.collect()
+    val results = input.collect()
+    assert(entryCount === results.length, s"size of results read in from $parts0")
+  }
+
+  ctest("New Hadoop API") {
+    sc = new SparkContext("local", "test", newSparkConf())
+    val conf = sc.hadoopConfiguration
+    val entryCount = testEntryCount
+    val numbers = sc.parallelize(1 to entryCount)
+    val example1 = new Path(TestDir, "example1")
+    saveAsTextFile(numbers, example1, conf)
+
+  }
+
+  /**
+   * Save this RDD as a text file, using string representations of elements.
+   *
+   * There's a bit of convoluted-ness here, as this supports writing to any Hadoop FS,
+   * rather than the default one in the configuration ... this is addressed by creating a
+   * new configuration
+   */
+  def saveAsTextFile[T](rdd: RDD[T], path: Path, conf: Configuration)(implicit fm: ClassTag[T])
+  : Unit = {
+    rdd.withScope {
+      val nullWritableClassTag = implicitly[ClassTag[NullWritable]]
+      val textClassTag = implicitly[ClassTag[Text]]
+      val r = rdd.mapPartitions { iter =>
+        val text = new Text()
+        iter.map { x =>
+          text.set(x.toString)
+          (NullWritable.get(), text)
+        }
+      }
+      val pathFS = FileSystem.get(path.toUri, conf)
+      val confWithTargetFS = new Configuration(conf)
+      confWithTargetFS.set(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY,
+        pathFS.getUri.toString)
+      val pairOps = RDD.rddToPairRDDFunctions(r)(nullWritableClassTag, textClassTag, null)
+      val job = NewAPIHadoopJob.getInstance(conf)
+      job.setOutputKeyClass(pairOps.keyClass)
+      job.setOutputValueClass(pairOps.valueClass)
+      job.setOutputFormatClass(TextOutputFormat[NullWritable, Text].getClass)
+      val jobConfiguration = job.getConfiguration
+      jobConfiguration.set("mapred.output.dir", path.toUri.toString)
+      pairOps.saveAsNewAPIHadoopDataset(jobConfiguration)
+    }
   }
 }

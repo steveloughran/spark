@@ -42,12 +42,18 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
    * ...some of the object stores don't implement `delete("/",true)`
    */
   protected val TestDir = new Path("/test")
-
+  val TEST_ENTRY_COUNT = 1000
   protected val conf = loadConfiguration()
 
   private var _filesystem: Option[FileSystem] = None
   protected def filesystem: Option[FileSystem] = _filesystem
   protected def fsURI = _filesystem.get.getUri
+
+  /**
+   * Subclasses may override this for different or configurable test sizes
+   * @return the number of entries in parallelized operations.
+   */
+  protected def testEntryCount: Int = TEST_ENTRY_COUNT
 
   /** this system property is always set in a JVM */
   protected val localTmpDir = new File(System.getProperty("java.io.tmpdir", "/tmp"))

@@ -79,4 +79,10 @@ private[spark] trait CloudTestKeys {
    * A test bucket for S3. All data in this bucket will be deleted during test suite teardowns;
    */
   val S3_TEST_URI = "s3a.test.uri"
+
+  /**
+   * Source of a public multi-MB CSV file
+   */
+  val S3_CSV_PATH = "s3a://landsat-pds.s3.amazonaws.com/scene_list.gz"
+
 }
