@@ -34,7 +34,7 @@ they are still object stores, [and the difference is significant](http://hadoop.
 
 In particular, the following behaviours are not normally those of a filesysem
 
-### Directory operations may not be atomic
+### Directory operations may not be atomic nor fast
 
 Directory rename and delete may be performed as a series of operations on the client. Specifically,
 `delete(path, recursive=true)` may be implemented as "list the objects, delete them singly or in batches".
@@ -66,7 +66,7 @@ when the output stream's `close()` operation is done.
 - There may not be an entry in the object store for the file (even a 0 byte one) until
 that stage.
 
-### The object stores eventual consistency may be visible, especially when updating or deleting data.
+### An object store's eventual consistency may be visible, especially when updating or deleting data.
 
 Object stores are often *Eventually Consistent*. This can surface, in particular:-
 
@@ -81,3 +81,81 @@ for the full details.
 
 
 ## Testing Cloud integration
+
+### Example Configuration for testing cloud data
+
+
+Single test configuration
+
+```xml
+<configuration>
+  <include xmlns="http://www.w3.org/2001/XInclude"
+    href="file:///home/hadoop/.ssh/auth-keys.xml"/>
+
+
+  <property>
+    <name>aws.tests.enabled</name>
+    <value>true</value>
+    <description>Flag to enable AWS tests</description>
+  </property>
+
+  <property>
+    <name>s3a.test.uri</name>
+    <value>s3a://testplan1</value>
+    <description>S3A path to a bucket which the test runs are free to write, read and delete
+    data.</description>
+  </property>
+</configuration>
+```
+
+This configuration uses XInclude to pull in the secret credentials for the account
+from the user's `~/.ssh/auth-keys.xml` file:
+
+```xml
+<configuration>
+  <property>
+    <name>fs.s3a.access.key</name>
+    <value>USERKEY</value>
+  </property>
+
+  <property>
+    <name>fs.s3a.secret.key</name>
+    <value>if.this.key.ever.leaks, reset it in the AWS console</value>
+  </property>
+</configuration>
+```
+
+Splitting the secret values out of the other XML files allows for the other files to
+be managed via SCM and/or shared, without risk.
+
+
+## Large dataset input tests
+
+Some tests read from large datasets; some simple IO of a multi GB source file,
+followed by actual parsing operations of CSV files.
+
+When testing against Amazon s3, their [public datasets](https://aws.amazon.com/public-data-sets/)
+are used. Specifically
+
+* Large object input.
+* CSV parsing: http://landsat-pds.s3.amazonaws.com/scene_list.gz
+ that is: s3a://landsat-pds/scene_list.gz
+
+Amazon provide
+
+
+https://s3.amazonaws.com/datasets.elasticmapreduce/
+
+
+## Test costs
+
+S3 incurs charges for storage and for IO out of the datacenter where the data is stored.
+
+The tests try to keep costs down by not working with large amounts of data, and by deleting
+all data on teardown. If a test run is aborted, data may be retained on the test filesystem.
+While the charges should only be a small amount, period purges of the bucket will keep costs down.
+
+Rerunning the tests to completion again should achieve this.
+
+The large dataset tests read in public data, so storage and bandwidth costs
+are incurred by Amazon themselves.

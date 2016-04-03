@@ -21,11 +21,14 @@ import java.io.{File, FileNotFoundException}
 import java.net.URI
 
 import scala.collection.JavaConverters._
+import scala.reflect.ClassTag
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FSDataInputStream, FileSystem, LocalFileSystem, Path}
+import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FSDataInputStream, FileStatus, FileSystem, LocalFileSystem, Path}
+import org.apache.hadoop.io.{NullWritable, Text}
 import org.scalatest.{BeforeAndAfter, Matchers}
 
+import org.apache.spark.rdd.RDD
 import org.apache.spark.{LocalSparkContext, SparkConf, SparkFunSuite}
 
 /**
@@ -196,7 +199,63 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     }
   }
 
-/*  def readBytesToString(fs: FileSystem, path: Path, length: Int) : String  = {
+  /**
+   * Measure the duration of an operation, log it
+   * @param operation operation description
+   * @param testFun function to execute
+   * @return time in milliseconds
+   */
+  def duration[T](operation: String)(testFun: => T): T = {
+    val start = System.currentTimeMillis()
+    try {
+      testFun
+    } finally {
+      val end = System.currentTimeMillis()
+      val d = end - start
+      logInfo(s"Duration of $operation = $d millis")
+    }
+  }
+
+  /**
+   * Save this RDD as a text file, using string representations of elements.
+   *
+   * There's a bit of convoluted-ness here, as this supports writing to any Hadoop FS,
+   * rather than the default one in the configuration ... this is addressed by creating a
+   * new configuration
+   */
+  def saveAsTextFile[T](rdd: RDD[T], path: Path, conf: Configuration)
+  : Unit = {
+    rdd.withScope {
+      val nullWritableClassTag = implicitly[ClassTag[NullWritable]]
+      val textClassTag = implicitly[ClassTag[Text]]
+      val r = rdd.mapPartitions { iter =>
+        val text = new Text()
+        iter.map { x =>
+          text.set(x.toString)
+          (NullWritable.get(), text)
+        }
+      }
+      val pathFS = FileSystem.get(path.toUri, conf)
+      val confWithTargetFS = new Configuration(conf)
+      confWithTargetFS.set(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY,
+        pathFS.getUri.toString)
+      val pairOps = RDD.rddToPairRDDFunctions(r)(nullWritableClassTag, textClassTag, null)
+      pairOps.saveAsNewAPIHadoopFile(path.toUri.toString,
+        pairOps.keyClass, pairOps.valueClass,
+        classOf[org.apache.hadoop.mapreduce.lib.output.TextOutputFormat[NullWritable, Text]],
+        confWithTargetFS)
+    }
+  }
+
+  def stat(path: Path): FileStatus = {
+    filesystem.get.getFileStatus(path)
+  }
+
+  def getFS(path: Path): FileSystem = {
+    FileSystem.get(path.toUri, conf)
+  }
+
+  /*  def readBytesToString(fs: FileSystem, path: Path, length: Int) : String  = {
     val in = fs.open(path)
     try {
       val buf = new Array[Byte](length)

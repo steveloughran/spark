@@ -20,16 +20,11 @@ package org.apache.spark.cloud.s3
 import java.io.FileNotFoundException
 import java.net.URI
 
-import scala.reflect.ClassTag
-
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FileStatus, FileSystem, Path}
 import org.apache.hadoop.fs.s3a.Constants
-import org.apache.hadoop.io.{NullWritable, Text}
+import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, Path}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
-import org.apache.spark.rdd.RDD
 
 private[spark] class S3aIOSuite extends CloudSuite {
 
@@ -73,13 +68,6 @@ private[spark] class S3aIOSuite extends CloudSuite {
     }
   }
 
-  def stat(path: Path): FileStatus = {
-    filesystem.get.getFileStatus(path)
-  }
-
-  def getFS(path: Path): FileSystem = {
-    FileSystem.get(path.toUri, conf)
-  }
 
   ctest("Generate then Read data -File Output Committer") {
     sc = new SparkContext("local", "test", newSparkConf())
@@ -119,38 +107,6 @@ private[spark] class S3aIOSuite extends CloudSuite {
     saveAsTextFile(numbers, example1, conf)
   }
 
-
-  /**
-   * Save this RDD as a text file, using string representations of elements.
-   *
-   * There's a bit of convoluted-ness here, as this supports writing to any Hadoop FS,
-   * rather than the default one in the configuration ... this is addressed by creating a
-   * new configuration
-   */
-  def saveAsTextFile[T](rdd: RDD[T], path: Path, conf: Configuration)
-  : Unit = {
-    rdd.withScope {
-      val nullWritableClassTag = implicitly[ClassTag[NullWritable]]
-      val textClassTag = implicitly[ClassTag[Text]]
-      val r = rdd.mapPartitions { iter =>
-        val text = new Text()
-        iter.map { x =>
-          text.set(x.toString)
-          (NullWritable.get(), text)
-        }
-      }
-      val pathFS = FileSystem.get(path.toUri, conf)
-      val confWithTargetFS = new Configuration(conf)
-      confWithTargetFS.set(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY,
-        pathFS.getUri.toString)
-      val pairOps = RDD.rddToPairRDDFunctions(r)(nullWritableClassTag, textClassTag, null)
-      pairOps.saveAsNewAPIHadoopFile(path.toUri.toString,
-        pairOps.keyClass, pairOps.valueClass,
-        classOf[org.apache.hadoop.mapreduce.lib.output.TextOutputFormat[NullWritable, Text]],
-        confWithTargetFS)
-    }
-  }
-
   ctest("Read compressed CSV") {
     val source = SceneListGZ
     sc = new SparkContext("local", "test", newSparkConf(source))
@@ -179,10 +135,12 @@ private[spark] class S3aIOSuite extends CloudSuite {
    * to address this. Logging these operation times helps track performance.
    * This test also tries to catch out a regression, where a `close()` operation
    * is implemented through reading through the entire input stream. This is exhibited
-   * in the time to close() while at offset 0 being O(len(file)).
+   * in the time to `close()` while at offset 0 being `O(len(file))`.
+   *
+   * Note also the cost of `readFully()`; this method call is common inside libraries
+   * like Orc and Parquet.
    */
   ctest("Cost of seek and close") {
-    sc = new SparkContext("local", "test", newSparkConf())
     val source = SceneListGZ
     val fs = getFS(source)
     val st = duration("stat") {
@@ -191,27 +149,34 @@ private[spark] class S3aIOSuite extends CloudSuite {
     val out = duration("open") {
       fs.open(source)
     }
-    duration("read[0]") {
+    duration("read() [0]") {
       assert(-1 !== out.read())
     }
-    duration("seek[EOF-2]") {
+    duration("seek(256) [1]") {
+      out.seek(256)
+    }
+    duration("seek(256) [256]") {
+      out.seek(256)
+    }
+    duration("seek(EOF-2)") {
       out.seek(st.getLen - 2)
     }
-    duration("read[EOF-2]") {
+    duration("read() [EOF-2]") {
       assert(-1 !== out.read())
     }
-    duration("readFully[1, byte[1]]") {
+    duration("readFully([1, byte[1]]) [EOF-1]") {
       val bytes = new Array[Byte](1)
       assert(-1 !== out.readFully(1L, bytes))
     }
-    duration("readFully[1, byte[1024]]") {
+    logInfo(s"current position ${out.getPos}")
+    duration("readFully[1, byte[1024]] [EOF-1]") {
       val bytes = new Array[Byte](1024)
       assert(-1 !== out.readFully(1L, bytes))
     }
-    duration("seek[256]") {
+    duration("seek(256) [EOF-1]") {
       out.seek(256)
     }
-    duration("read[256]") {
+    duration("read() [offset=256]") {
       assert(-1 !== out.read())
     }
     duration("close()") {
@@ -221,20 +186,4 @@ private[spark] class S3aIOSuite extends CloudSuite {
 
   }
 
-  /**
-   * Measure the duration of an operation, log it
-   * @param operation operation description
-   * @param testFun function to execute
-   * @return time in milliseconds
-   */
-  def duration[T](operation: String)(testFun: => T): T = {
-    val start = System.currentTimeMillis()
-    try {
-      testFun
-    } finally {
-      val end = System.currentTimeMillis()
-      val d = end - start
-      logInfo(s"Duration of $operation = $d millis")
-    }
-  }
 }
