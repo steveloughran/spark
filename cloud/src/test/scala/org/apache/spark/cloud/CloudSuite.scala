@@ -51,6 +51,7 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
   private var _filesystem: Option[FileSystem] = None
   protected def filesystem: Option[FileSystem] = _filesystem
   protected def fsURI = _filesystem.get.getUri
+  private val testKeyMap = extractTestKeys()
 
   /**
    * Subclasses may override this for different or configurable test sizes
@@ -61,6 +62,62 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
   /** this system property is always set in a JVM */
   protected val localTmpDir = new File(System.getProperty("java.io.tmpdir", "/tmp"))
       .getCanonicalFile
+
+  /**
+   * Take the test method keys propery, split to a set of keys
+   * @return the keys
+   */
+  private def extractTestKeys(): Set[String] = {
+    val property = System.getProperty(TEST_METHOD_KEYS, "")
+    val splits = property.split(',')
+    var s: Set[String] = Set()
+    for (elem <- splits) {
+      val trimmed = elem.trim
+      if (!trimmed.isEmpty) {
+        s = s ++ Set(elem.trim)
+      }
+    }
+    if (s.nonEmpty) {
+      logInfo(s"Test keys: $s")
+    }
+    s
+  }
+
+  /**
+   * Is a specific test enabled
+   * @param key test key
+   * @return true if there were no test keys name, or, if there were, is this key in the list
+   */
+  def isTestEnabled(key: String): Boolean = {
+    testKeyMap.isEmpty || testKeyMap.contains(key)
+  }
+
+  /**
+   * A conditional test which is only executed when the suite is enabled
+   * @param summary description of the text
+   * @param testFun function to evaluate
+   */
+  protected def ctest(key: String, summary: String, detail: String)(testFun: => Unit): Unit = {
+    val testText = key + ": " + summary
+    if (enabled && isTestEnabled(key)) {
+      registerTest(testText) {testFun}
+    } else {
+      registerIgnoredTest(summary) {testFun}
+    }
+  }
+
+  /**
+   * A conditional test which is only executed when the suite is enabled
+   * @param testText description of the text
+   * @param testFun function to evaluate
+   */
+  protected def ctest(testText: String)(testFun: => Unit): Unit = {
+    if (enabled) {
+      registerTest(testText) {testFun}
+    } else {
+      registerIgnoredTest(testText) {testFun}
+    }
+  }
 
   /**
    * Update the filesystem; includes a validity check to ensure that the local filesystem
@@ -186,34 +243,47 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     newSparkConf(path.getFileSystem(conf).getUri)
   }
 
+
   /**
-   * A conditional test which is only executed when the suite is enabled
-   * @param testText description of the text
-   * @param testFun function to evaluate
+   * Measure the duration of an operation, log it with the text
+   * @param operation operation description
+   * @param testFun function to execute
+   * @return the result
    */
-  protected def ctest(testText: String)(testFun: => Unit): Unit = {
-    if (enabled) {
-      registerTest(testText) { testFun }
-    } else {
-      registerIgnoredTest(testText) { testFun }
+  def duration[T](operation: String)(testFun: => T): T = {
+    val start = nanos
+    try {
+      testFun
+    } finally {
+      val end = nanos()
+      val d = end - start
+      logInfo(s"Duration of $operation = $d ns")
     }
   }
 
   /**
    * Measure the duration of an operation, log it
-   * @param operation operation description
    * @param testFun function to execute
-   * @return time in milliseconds
+   * @return the result and the operation duration in nanos
    */
-  def duration[T](operation: String)(testFun: => T): T = {
-    val start = System.currentTimeMillis()
+  def duration2[T](testFun: => T): (T, Long) = {
+    val start = nanos()
     try {
-      testFun
-    } finally {
-      val end = System.currentTimeMillis()
+      var r = testFun
+      val end = nanos()
       val d = end - start
-      logInfo(s"Duration of $operation = $d millis")
+      (r, d)
+    } catch {
+      case ex: Exception =>
+        val end = nanos()
+        val d = end - start
+        logError("After $d ns: $ex", ex)
+        throw ex
     }
+  }
+
+  def nanos(): Long = {
+    System.nanoTime()
   }
 
   /**

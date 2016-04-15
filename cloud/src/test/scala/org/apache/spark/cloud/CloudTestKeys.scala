@@ -48,6 +48,14 @@ import org.apache.hadoop.fs.s3a.Constants
  */
 private[spark] trait CloudTestKeys {
 
+  /**
+   * Optional method for test keys; if set, built into a map of test to run
+   */
+  val TEST_METHOD_KEYS = "test.method.keys"
+
+  /**
+   * Name of the configuration file to load for test configuration
+   */
   val CLOUD_TEST_CONFIGURATION_FILE = "cloud.test.configuration.file"
 
   /**
@@ -83,6 +91,7 @@ private[spark] trait CloudTestKeys {
   /**
    * Source of a public multi-MB CSV file
    */
-  val S3_CSV_PATH = "s3a://landsat-pds.s3.amazonaws.com/scene_list.gz"
+  val S3_CSV_PATH = "s3a://landsat-pds/scene_list.gz"
+  // "s3a://landsat-pds.s3.amazonaws.com/scene_list.gz"
 
 }

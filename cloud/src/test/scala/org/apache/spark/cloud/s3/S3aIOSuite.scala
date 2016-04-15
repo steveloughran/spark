@@ -20,8 +20,10 @@ package org.apache.spark.cloud.s3
 import java.io.FileNotFoundException
 import java.net.URI
 
+import scala.collection.mutable
+
 import org.apache.hadoop.fs.s3a.Constants
-import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, Path}
+import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FSDataInputStream, Path}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
@@ -29,8 +31,9 @@ import org.apache.spark.cloud.CloudSuite
 private[spark] class S3aIOSuite extends CloudSuite {
 
 
-  val SceneListGZ = new Path("s3a://landsat-pds/scene_list.gz")
-  /** number of lines, from `gunzip` + `wc -l` */
+  val sceneList = new Path(S3_CSV_PATH)
+
+  /** number of lines, from `gunzip` + `wc -l` on day tested. This grows over time*/
   val ExpectedSceneListLines = 447919
 
   override def enabled: Boolean = super.enabled && conf.getBoolean(AWS_TESTS_ENABLED, false)
@@ -55,7 +58,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     cleanFilesystemInTeardown()
   }
 
-  ctest("Create, delete directory") {
+  ctest("mkdirs", "Create, delete directory", "") {
     val fs = filesystem.get
     val path = TestDir
     fs.mkdirs(path)
@@ -68,8 +71,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     }
   }
 
-
-  ctest("Generate then Read data -File Output Committer") {
+  ctest("FileOutput", "Generate then Read data -File Output Committer", "") {
     sc = new SparkContext("local", "test", newSparkConf())
     val conf = sc.hadoopConfiguration
     assert(fsURI.toString === conf.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY))
@@ -98,7 +100,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     assert(entryCount === results.length, s"size of results read in from $parts0")
   }
 
-  ctest("New Hadoop API") {
+  ctest("New Hadoop API", "New Hadoop API", "") {
     sc = new SparkContext("local", "test", newSparkConf())
     val conf = sc.hadoopConfiguration
     val entryCount = testEntryCount
@@ -107,20 +109,21 @@ private[spark] class S3aIOSuite extends CloudSuite {
     saveAsTextFile(numbers, example1, conf)
   }
 
-  ctest("Read compressed CSV") {
-    val source = SceneListGZ
+  ctest("CSVgz", "Read compressed CSV", "") {
+    val source = sceneList
     sc = new SparkContext("local", "test", newSparkConf(source))
     val sceneInfo = getFS(source).getFileStatus(source)
     logInfo(s"Compressed size = ${sceneInfo.getLen}")
     val input = sc.textFile(source.toString)
     val count = input.count()
     logInfo(s" size of $source = $count rows")
-    assert(ExpectedSceneListLines === count, s"Number of rows in $source")
+    assert(ExpectedSceneListLines <= count,
+      s"Number of rows in $source [$count] less than expected value $ExpectedSceneListLines")
   }
 
-  ctest("Read compressed CSV differentFS") {
+  ctest("CSVdiffFS", "Read compressed CSV differentFS", "") {
     sc = new SparkContext("local", "test", newSparkConf())
-    val source = SceneListGZ
+    val source = sceneList
     val input = sc.textFile(source.toString)
     val count = input.count()
     logInfo(s" size of $source = $count rows")
@@ -140,8 +143,18 @@ private[spark] class S3aIOSuite extends CloudSuite {
    * Note also the cost of `readFully()`; this method call is common inside libraries
    * like Orc and Parquet.
    */
-  ctest("Cost of seek and close") {
-    val source = SceneListGZ
+  ctest("SeekClose", "Cost of seek and close",
+    """Assess cost of seek and read operations.
+      | When moving the cursor in an input stream, an HTTP connection may be closed and
+      | then re-opened. This can be very expensive; tactics like streaming forwards instead
+      | of seeking, and/or postponing movement until the following read ('lazy seek') try
+      | to address this. Logging these operation times helps track performance.
+      | This test also tries to catch out a regression, where a `close()` operation
+      | is implemented through reading through the entire input stream. This is exhibited
+      | in the time to `close()` while at offset 0 being `O(len(file))`.
+      | Note also the cost of `readFully()`; this method call is common inside libraries
+      | like Orc and Parquet.""".stripMargin) {
+    val source = sceneList
     val fs = getFS(source)
     val st = duration("stat") {
       fs.getFileStatus(source)
@@ -182,8 +195,50 @@ private[spark] class S3aIOSuite extends CloudSuite {
     duration("close()") {
       out.close
     }
+  }
 
-
+  ctest("ReadBytesReturned", "Read Bytes",
+    """Read in blocks and assess their size and duration.
+      | This is to identify buffering quirks
+    """.stripMargin) {
+    val source = sceneList
+    val fs = getFS(source)
+    val blockSize = 8192
+    val buffer = new Array[Byte](blockSize)
+    val returnSizes: mutable.Map[Int, (Int, Long)] = mutable.Map()
+    val stat = fs.getFileStatus(source)
+    val blocks = (stat.getLen/blockSize).toInt
+    val instream: FSDataInputStream = fs.open(source)
+    var readOperations = 0
+    var totalReadTime = 0L
+    for (i <- 1 to blocks) {
+      var offset = 0
+      while(offset < blockSize) {
+        readOperations += 1
+        val (bytesRead, time) = duration2 {
+          instream.read(buffer, offset, blockSize - offset)
+        }
+        assert(bytesRead> 0,  s"In block $i read from offset $offset returned $bytesRead")
+        offset += bytesRead
+        totalReadTime += time
+        val current = returnSizes.getOrElse(bytesRead, (0, 0L))
+        returnSizes(bytesRead) = (1 + current._1, time + current._2)
+//        Thread.sleep(1)
+      }
+    }
+    // completion
+    logInfo(
+      s"""$blocks blocks of size $blockSize;
+         | total #of read operations $readOperations;
+         | total read time=$totalReadTime;
+         | ${totalReadTime/(blocks * blockSize)} ns/byte""".stripMargin)
+    returnSizes.toSeq.sortBy(_._1).foreach { v  =>
+      val k = v._1
+      val c = v._2._1
+      val d = v._2._2
+      logInfo(s"[$k] count = $c average duration = ${d/c}")
+    }
+//    sc.parallelize(returnSizes.toSeq)
   }
 
 }

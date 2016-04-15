@@ -228,6 +228,11 @@
     <!-- override point: Hadoop XML file containing (directly or via XInclude references)
     the credentials needed to test against target cloud infrastructures. -->
     <cloud.test.configuration.file>(unset)</cloud.test.configuration.file>
+    <!--
+     system property listing a set of method keys; used in conjuction with wildcard suites
+     to name individual keyed test case methods. If unset: run all.
+      -->
+    <test.method.keys></test.method.keys>
   </properties>
   <repositories>
     <repository>
@@ -2051,6 +2056,7 @@
               <test.src.tables>__not_used__</test.src.tables>
               <!-- optionally set for cloud infrastructure tests -->
               <cloud.test.configuration.file>${cloud.test.configuration.file}</cloud.test.configuration.file>
+              <test.method.keys>${test.method.keys}</test.method.keys>
             </systemProperties>
             <tagsToExclude>${test.exclude.tags}</tagsToExclude>
           </configuration>
