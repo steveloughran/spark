@@ -266,13 +266,13 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
    * @param testFun function to execute
    * @return the result and the operation duration in nanos
    */
-  def duration2[T](testFun: => T): (T, Long) = {
+  def duration2[T](testFun: => T): (T, Long, Long) = {
     val start = nanos()
     try {
       var r = testFun
       val end = nanos()
       val d = end - start
-      (r, d)
+      (r, start, d)
     } catch {
       case ex: Exception =>
         val end = nanos()

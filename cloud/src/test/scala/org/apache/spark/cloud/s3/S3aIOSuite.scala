@@ -211,34 +211,64 @@ private[spark] class S3aIOSuite extends CloudSuite {
     val instream: FSDataInputStream = fs.open(source)
     var readOperations = 0
     var totalReadTime = 0L
+    val results = new mutable.MutableList[ReadSample]()
     for (i <- 1 to blocks) {
       var offset = 0
       while(offset < blockSize) {
         readOperations += 1
-        val (bytesRead, time) = duration2 {
-          instream.read(buffer, offset, blockSize - offset)
+        val requested = blockSize - offset
+        val (bytesRead, started, time) = duration2 {
+          instream.read(buffer, offset, requested)
         }
         assert(bytesRead> 0,  s"In block $i read from offset $offset returned $bytesRead")
         offset += bytesRead
         totalReadTime += time
         val current = returnSizes.getOrElse(bytesRead, (0, 0L))
         returnSizes(bytesRead) = (1 + current._1, time + current._2)
-//        Thread.sleep(1)
+        val sample = new ReadSample(started, time, blockSize, requested, bytesRead)
+        results += sample
       }
     }
-    // completion
+        // completion
     logInfo(
       s"""$blocks blocks of size $blockSize;
          | total #of read operations $readOperations;
          | total read time=$totalReadTime;
          | ${totalReadTime/(blocks * blockSize)} ns/byte""".stripMargin)
+
+    sc = new SparkContext("local", "test", newSparkConf())
+
     returnSizes.toSeq.sortBy(_._1).foreach { v  =>
       val k = v._1
       val c = v._2._1
       val d = v._2._2
       logInfo(s"[$k] count = $c average duration = ${d/c}")
     }
-//    sc.parallelize(returnSizes.toSeq)
+
+    val readRDD = sc.parallelize(results)
+    val blockFrequency = readRDD.map( s => (s.blockSize, 1))
+        .reduceByKey((v1, v2) => v1 + v2)
+        .sortBy(_._2, false)
+    logInfo(s"Most frequent sizes:\n")
+    blockFrequency.toLocalIterator.foreach{ t =>
+      logInfo(s"[${t._1}]: ${t._2}\n")
+    }
   }
 
+}
+
+
+private class ReadSample(
+    val started: Long,
+    val duration: Long,
+    val blockSize: Int,
+    val bytesRequested: Int,
+    val bytesRead: Int ) extends Serializable {
+
+  def perByte: Long = { if (duration > 0)  bytesRead / duration else -1L}
+
+  def delta: Int = { bytesRequested - bytesRead }
+  
+  override def toString = s"ReadSample(started=$started, duration=$duration," +
+      s" blockSize=$blockSize, bytesRequested=$bytesRequested, bytesRead=$bytesRead)"
 }
