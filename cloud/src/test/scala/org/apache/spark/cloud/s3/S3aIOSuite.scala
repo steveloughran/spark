@@ -27,6 +27,8 @@ import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FSDataInputStream, P
 
 import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
+import org.apache.spark.mllib.linalg.Vectors
+import org.apache.spark.mllib.stat.{MultivariateStatisticalSummary, Statistics}
 
 private[spark] class S3aIOSuite extends CloudSuite {
 
@@ -130,19 +132,6 @@ private[spark] class S3aIOSuite extends CloudSuite {
     assert(ExpectedSceneListLines === count, s"Number of rows in $source")
   }
 
-  /**
-   * Assess cost of seek and read operations.
-   * When moving the cursor in an input stream, an HTTP connection may be closed and
-   * then re-opened. This can be very expensive; tactics like streaming forwards instead
-   * of seeking, and/or postponing movement until the following read ("lazy seek") try
-   * to address this. Logging these operation times helps track performance.
-   * This test also tries to catch out a regression, where a `close()` operation
-   * is implemented through reading through the entire input stream. This is exhibited
-   * in the time to `close()` while at offset 0 being `O(len(file))`.
-   *
-   * Note also the cost of `readFully()`; this method call is common inside libraries
-   * like Orc and Parquet.
-   */
   ctest("SeekClose", "Cost of seek and close",
     """Assess cost of seek and read operations.
       | When moving the cursor in an input stream, an HTTP connection may be closed and
@@ -152,6 +141,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
       | This test also tries to catch out a regression, where a `close()` operation
       | is implemented through reading through the entire input stream. This is exhibited
       | in the time to `close()` while at offset 0 being `O(len(file))`.
+      |
       | Note also the cost of `readFully()`; this method call is common inside libraries
       | like Orc and Parquet.""".stripMargin) {
     val source = sceneList
@@ -203,7 +193,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     """.stripMargin) {
     val source = sceneList
     val fs = getFS(source)
-    val blockSize = 8192
+    val blockSize = 512
     val buffer = new Array[Byte](blockSize)
     val returnSizes: mutable.Map[Int, (Int, Long)] = mutable.Map()
     val stat = fs.getFileStatus(source)
@@ -217,6 +207,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
       while(offset < blockSize) {
         readOperations += 1
         val requested = blockSize - offset
+        val pos = instream.getPos
         val (bytesRead, started, time) = duration2 {
           instream.read(buffer, offset, requested)
         }
@@ -225,7 +216,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
         totalReadTime += time
         val current = returnSizes.getOrElse(bytesRead, (0, 0L))
         returnSizes(bytesRead) = (1 + current._1, time + current._2)
-        val sample = new ReadSample(started, time, blockSize, requested, bytesRead)
+        val sample = new ReadSample(started, time, blockSize, requested, bytesRead, pos)
         results += sample
       }
     }
@@ -236,39 +227,71 @@ private[spark] class S3aIOSuite extends CloudSuite {
          | total read time=$totalReadTime;
          | ${totalReadTime/(blocks * blockSize)} ns/byte""".stripMargin)
 
-    sc = new SparkContext("local", "test", newSparkConf())
 
+    logInfo("Read sizes")
     returnSizes.toSeq.sortBy(_._1).foreach { v  =>
-      val k = v._1
-      val c = v._2._1
-      val d = v._2._2
-      logInfo(s"[$k] count = $c average duration = ${d/c}")
+      val returnedBytes = v._1
+      val count = v._2._1
+      val totalDuration = v._2._2
+      logInfo(s"[$returnedBytes] count = $count" +
+          s" average duration = ${totalDuration/count}" +
+          s" nS/byte = ${totalDuration/(count * returnedBytes)}")
     }
 
-    val readRDD = sc.parallelize(results)
-    val blockFrequency = readRDD.map( s => (s.blockSize, 1))
+    // spark analysis
+    sc = new SparkContext("local", "test", newSparkConf())
+
+    val resultsRDD = sc.parallelize(results)
+    val blockFrequency = resultsRDD.map(s => (s.blockSize, 1))
         .reduceByKey((v1, v2) => v1 + v2)
         .sortBy(_._2, false)
     logInfo(s"Most frequent sizes:\n")
     blockFrequency.toLocalIterator.foreach{ t =>
       logInfo(s"[${t._1}]: ${t._2}\n")
     }
+    val resultsVector = resultsRDD.map( _.toVector)
+    val stats = Statistics.colStats(resultsVector)
+    logInfo(s"Bytes Read ${summary(stats, 4)}")
+    logInfo(s"Difference between requested and actual ${summary(stats, 7)}")
+    logInfo(s"Per byte read time/nS ${summary(stats, 6)}")
   }
 
+  def summary(stats: MultivariateStatisticalSummary, col: Int): String = {
+    val b = new StringBuilder(256)
+    b.append(s"min=${stats.min(col)}; ")
+    b.append(s"max=${stats.max(col)}; ")
+    b.append(s"mean=${stats.mean(col)}; ")
+    b.toString()
+  }
 }
-
 
 private class ReadSample(
     val started: Long,
     val duration: Long,
     val blockSize: Int,
     val bytesRequested: Int,
-    val bytesRead: Int ) extends Serializable {
+    val bytesRead: Int,
+    val pos: Long) extends Serializable {
 
   def perByte: Long = { if (duration > 0)  bytesRead / duration else -1L}
 
   def delta: Int = { bytesRequested - bytesRead }
-  
+
   override def toString = s"ReadSample(started=$started, duration=$duration," +
-      s" blockSize=$blockSize, bytesRequested=$bytesRequested, bytesRead=$bytesRead)"
+      s" blockSize=$blockSize, bytesRequested=$bytesRequested, bytesRead=$bytesRead)" +
+      s" pos=$pos"
+
+  def toVector: org.apache.spark.mllib.linalg.Vector = {
+    val a = new Array[Double](8)
+    a(0) = started.toDouble
+    a(1) = duration.toDouble
+    a(2) = blockSize.toDouble
+    a(3) = bytesRequested.toDouble
+    a(4) = bytesRead.toDouble
+    a(5) = pos.toDouble
+    a(6) = perByte.toDouble
+    a(7) = delta.toDouble
+    Vectors.dense(a)
+  }
+
 }
