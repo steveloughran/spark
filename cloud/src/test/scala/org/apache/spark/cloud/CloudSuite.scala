@@ -19,6 +19,7 @@ package org.apache.spark.cloud
 
 import java.io.{File, FileNotFoundException}
 import java.net.URI
+import java.util.Locale
 
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
@@ -73,7 +74,7 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     var s: Set[String] = Set()
     for (elem <- splits) {
       val trimmed = elem.trim
-      if (!trimmed.isEmpty) {
+      if (!trimmed.isEmpty && trimmed != "null") {
         s = s ++ Set(elem.trim)
       }
     }
@@ -257,7 +258,7 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     } finally {
       val end = nanos()
       val d = end - start
-      logInfo(s"Duration of $operation = $d ns")
+      logInfo(s"Duration of $operation = ${toHuman(d)} ns")
     }
   }
 
@@ -277,7 +278,7 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
       case ex: Exception =>
         val end = nanos()
         val d = end - start
-        logError("After $d ns: $ex", ex)
+        logError("After ${toHuman(d)} ns: $ex", ex)
         throw ex
     }
   }
@@ -323,6 +324,10 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
 
   def getFS(path: Path): FileSystem = {
     FileSystem.get(path.toUri, conf)
+  }
+
+  def toHuman(ns: Long): String = {
+    String.format(Locale.ENGLISH, "%,010d", ns.asInstanceOf[Object])
   }
 
   /*  def readBytesToString(fs: FileSystem, path: Path, length: Int) : String  = {

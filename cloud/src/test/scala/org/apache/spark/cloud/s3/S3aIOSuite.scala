@@ -116,9 +116,15 @@ private[spark] class S3aIOSuite extends CloudSuite {
     sc = new SparkContext("local", "test", newSparkConf(source))
     val sceneInfo = getFS(source).getFileStatus(source)
     logInfo(s"Compressed size = ${sceneInfo.getLen}")
-    val input = sc.textFile(source.toString)
-    val count = input.count()
-    logInfo(s" size of $source = $count rows")
+    validateCSV(sc, source)
+  }
+
+  def validateCSV(ctx: SparkContext, source: Path): Unit = {
+    val input = ctx.textFile(source.toString)
+    val (count, started, time) = duration2 {
+      input.count()
+    }
+    logInfo(s" size of $source = $count rows read in $time nS")
     assert(ExpectedSceneListLines <= count,
       s"Number of rows in $source [$count] less than expected value $ExpectedSceneListLines")
   }
@@ -127,9 +133,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     sc = new SparkContext("local", "test", newSparkConf())
     val source = sceneList
     val input = sc.textFile(source.toString)
-    val count = input.count()
-    logInfo(s" size of $source = $count rows")
-    assert(ExpectedSceneListLines === count, s"Number of rows in $source")
+    validateCSV(sc, source)
   }
 
   ctest("SeekClose", "Cost of seek and close",
@@ -149,37 +153,50 @@ private[spark] class S3aIOSuite extends CloudSuite {
     val st = duration("stat") {
       fs.getFileStatus(source)
     }
+    val eof = st.getLen
     val out = duration("open") {
       fs.open(source)
     }
-    duration("read() [0]") {
+    def time[T](operation: String)(testFun: => T): T = {
+      var r = duration(operation + s" [pos = ${out.getPos}]")(testFun)
+      logInfo(s"  New position=${out.getPos}; distance from EOF=${eof-out.getPos}")
+      r
+    }
+
+    time("read()") {
       assert(-1 !== out.read())
     }
-    duration("seek(256) [1]") {
+    time("seek(256)") {
       out.seek(256)
     }
-    duration("seek(256) [256]") {
+    time("seek(256)") {
       out.seek(256)
     }
-    duration("seek(EOF-2)") {
+    time("seek(EOF-2)") {
       out.seek(st.getLen - 2)
     }
-    duration("read() [EOF-2]") {
+    time("read()") {
       assert(-1 !== out.read())
     }
-    duration("readFully([1, byte[1]]) [EOF-1]") {
-      val bytes = new Array[Byte](1)
-      assert(-1 !== out.readFully(1L, bytes))
+
+    def readFully(offset: Long, len: Int) = {
+      time(s"readFully([$offset, byte[$len]])") {
+        val bytes = new Array[Byte](len)
+        assert(-1 !== out.readFully(offset, bytes))
+      }
     }
-    logInfo(s"current position ${out.getPos}")
-    duration("readFully[1, byte[1024]] [EOF-1]") {
-      val bytes = new Array[Byte](1024)
-      assert(-1 !== out.readFully(1L, bytes))
+    readFully(1L, 1)
+    readFully(1L, 256)
+    readFully(260L, 256)
+    readFully(1024L, 256)
+    readFully(1536L, 256)
+    readFully(8192L, 1024)
+    readFully(8192L + 1024 + 512, 1024)
+
+    time("seek(getPos)") {
+      out.seek(out.getPos())
     }
-    duration("seek(256) [EOF-1]") {
-      out.seek(256)
-    }
-    duration("read() [offset=256]") {
+    time("read()") {
       assert(-1 !== out.read())
     }
     duration("close()") {
@@ -193,7 +210,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     """.stripMargin) {
     val source = sceneList
     val fs = getFS(source)
-    val blockSize = 512
+    val blockSize = 8192
     val buffer = new Array[Byte](blockSize)
     val returnSizes: mutable.Map[Int, (Int, Long)] = mutable.Map()
     val stat = fs.getFileStatus(source)
@@ -224,7 +241,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     logInfo(
       s"""$blocks blocks of size $blockSize;
          | total #of read operations $readOperations;
-         | total read time=$totalReadTime;
+         | total read time=${toHuman(totalReadTime)};
          | ${totalReadTime/(blocks * blockSize)} ns/byte""".stripMargin)
 
 
@@ -273,7 +290,7 @@ private class ReadSample(
     val bytesRead: Int,
     val pos: Long) extends Serializable {
 
-  def perByte: Long = { if (duration > 0)  bytesRead / duration else -1L}
+  def perByte: Long = { if (duration > 0)  bytesRead / duration else -1L }
 
   def delta: Int = { bytesRequested - bytesRead }
 
