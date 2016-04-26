@@ -327,7 +327,7 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
   }
 
   def toHuman(ns: Long): String = {
-    String.format(Locale.ENGLISH, "%,010d", ns.asInstanceOf[Object])
+    String.format(Locale.ENGLISH, "%,d", ns.asInstanceOf[Object])
   }
 
   /*  def readBytesToString(fs: FileSystem, path: Path, length: Int) : String  = {

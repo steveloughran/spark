@@ -23,7 +23,7 @@ import java.net.URI
 import scala.collection.mutable
 
 import org.apache.hadoop.fs.s3a.Constants
-import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FSDataInputStream, Path}
+import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FSDataInputStream, FileSystem, Path}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
@@ -100,6 +100,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     val input = sc.textFile(parts0.getPath.toString)
     val results = input.collect()
     assert(entryCount === results.length, s"size of results read in from $parts0")
+    logInfo(s"Filesystem statistics $fs")
   }
 
   ctest("New Hadoop API", "New Hadoop API", "") {
@@ -117,6 +118,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     val sceneInfo = getFS(source).getFileStatus(source)
     logInfo(s"Compressed size = ${sceneInfo.getLen}")
     validateCSV(sc, source)
+    logInfo(s"Filesystem statistics ${getFS(source)}")
   }
 
   def validateCSV(ctx: SparkContext, source: Path): Unit = {
@@ -134,9 +136,10 @@ private[spark] class S3aIOSuite extends CloudSuite {
     val source = sceneList
     val input = sc.textFile(source.toString)
     validateCSV(sc, source)
+    logInfo(s"Filesystem statistics ${getFS(source)}")
   }
 
-  ctest("SeekClose", "Cost of seek and close",
+  ctest("SeekReadFully", "Cost of seek and ReadFully",
     """Assess cost of seek and read operations.
       | When moving the cursor in an input stream, an HTTP connection may be closed and
       | then re-opened. This can be very expensive; tactics like streaming forwards instead
@@ -150,39 +153,42 @@ private[spark] class S3aIOSuite extends CloudSuite {
       | like Orc and Parquet.""".stripMargin) {
     val source = sceneList
     val fs = getFS(source)
+    FileSystem.clearStatistics
+    val stats = FileSystem.getStatistics("s3a", fs.getClass)
+    stats.reset()
     val st = duration("stat") {
       fs.getFileStatus(source)
     }
-    val eof = st.getLen
-    val out = duration("open") {
+    val in = duration("open") {
       fs.open(source)
     }
     def time[T](operation: String)(testFun: => T): T = {
-      var r = duration(operation + s" [pos = ${out.getPos}]")(testFun)
-      logInfo(s"  New position=${out.getPos}; distance from EOF=${eof-out.getPos}")
+      logInfo(s"")
+      var r = duration(operation + s" [pos = ${in.getPos}]")(testFun)
+      logInfo(s"  ${in.getWrappedStream}")
       r
     }
 
     time("read()") {
-      assert(-1 !== out.read())
+      assert(-1 !== in.read())
     }
     time("seek(256)") {
-      out.seek(256)
+      in.seek(256)
     }
     time("seek(256)") {
-      out.seek(256)
+      in.seek(256)
     }
     time("seek(EOF-2)") {
-      out.seek(st.getLen - 2)
+      in.seek(st.getLen - 2)
     }
     time("read()") {
-      assert(-1 !== out.read())
+      assert(-1 !== in.read())
     }
 
     def readFully(offset: Long, len: Int) = {
-      time(s"readFully([$offset, byte[$len]])") {
+      time(s"readFully($offset, byte[$len])") {
         val bytes = new Array[Byte](len)
-        assert(-1 !== out.readFully(offset, bytes))
+        assert(-1 !== in.readFully(offset, bytes))
       }
     }
     readFully(1L, 1)
@@ -194,14 +200,15 @@ private[spark] class S3aIOSuite extends CloudSuite {
     readFully(8192L + 1024 + 512, 1024)
 
     time("seek(getPos)") {
-      out.seek(out.getPos())
+      in.seek(in.getPos())
     }
     time("read()") {
-      assert(-1 !== out.read())
+      assert(-1 !== in.read())
     }
     duration("close()") {
-      out.close
+      in.close
     }
+    logInfo(s"Statistics $stats")
   }
 
   ctest("ReadBytesReturned", "Read Bytes",
@@ -271,6 +278,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
     logInfo(s"Bytes Read ${summary(stats, 4)}")
     logInfo(s"Difference between requested and actual ${summary(stats, 7)}")
     logInfo(s"Per byte read time/nS ${summary(stats, 6)}")
+    logInfo(s"Filesystem statistics ${getFS(source)}")
   }
 
   def summary(stats: MultivariateStatisticalSummary, col: Int): String = {
