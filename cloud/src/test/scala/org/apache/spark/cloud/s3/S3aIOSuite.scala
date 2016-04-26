@@ -33,7 +33,7 @@ import org.apache.spark.mllib.stat.{MultivariateStatisticalSummary, Statistics}
 private[spark] class S3aIOSuite extends CloudSuite {
 
 
-  val sceneList = new Path(S3_CSV_PATH)
+  val SceneList = new Path(S3_CSV_PATH)
 
   /** number of lines, from `gunzip` + `wc -l` on day tested. This grows over time*/
   val ExpectedSceneListLines = 447919
@@ -60,7 +60,8 @@ private[spark] class S3aIOSuite extends CloudSuite {
     cleanFilesystemInTeardown()
   }
 
-  ctest("mkdirs", "Create, delete directory", "") {
+  ctest("mkdirs", "Create, delete directory",
+    "Simple test of directory operations") {
     val fs = filesystem.get
     val path = TestDir
     fs.mkdirs(path)
@@ -73,7 +74,11 @@ private[spark] class S3aIOSuite extends CloudSuite {
     }
   }
 
-  ctest("FileOutput", "Generate then Read data -File Output Committer", "") {
+  ctest("FileOutput", "Generate then Read data -File Output Committer",
+    """Use the classic File Output Committer to commit work to S3A.
+      | This committer has race and failure conditions, with the commit being O(bytes)
+      | and non-atomic.
+    """.stripMargin) {
     sc = new SparkContext("local", "test", newSparkConf())
     val conf = sc.hadoopConfiguration
     assert(fsURI.toString === conf.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY))
@@ -103,17 +108,17 @@ private[spark] class S3aIOSuite extends CloudSuite {
     logInfo(s"Filesystem statistics $fs")
   }
 
-  ctest("New Hadoop API", "New Hadoop API", "") {
+  ctest("New Hadoop API", "New Hadoop API",
+    "Use SparkContext.saveAsNewAPIHadoopFile() to save to S3a") {
     sc = new SparkContext("local", "test", newSparkConf())
-    val conf = sc.hadoopConfiguration
-    val entryCount = testEntryCount
-    val numbers = sc.parallelize(1 to entryCount)
+    val numbers = sc.parallelize(1 to testEntryCount)
     val example1 = new Path(TestDir, "example1")
-    saveAsTextFile(numbers, example1, conf)
+    saveAsTextFile(numbers, example1, sc.hadoopConfiguration)
   }
 
-  ctest("CSVgz", "Read compressed CSV", "") {
-    val source = sceneList
+  ctest("CSVgz", "Read compressed CSV",
+    "Read compressed CSV files through the spark context") {
+    val source = SceneList
     sc = new SparkContext("local", "test", newSparkConf(source))
     val sceneInfo = getFS(source).getFileStatus(source)
     logInfo(s"Compressed size = ${sceneInfo.getLen}")
@@ -121,19 +126,31 @@ private[spark] class S3aIOSuite extends CloudSuite {
     logInfo(s"Filesystem statistics ${getFS(source)}")
   }
 
-  def validateCSV(ctx: SparkContext, source: Path): Unit = {
+  /**
+   * Validate the CSV by loading it, counting the number of lines and verifying that it
+   * is at least as big as that expected. This minimum size test verifies that the source file
+   * was read, even when that file is growing from day to day.
+   * @param ctx context
+   * @param source source object
+   * @param lines the minimum number of lines whcih the source must have.
+   * @return the actual count of lines read
+   */
+  def validateCSV(ctx: SparkContext, source: Path, lines: Long = ExpectedSceneListLines): Long = {
     val input = ctx.textFile(source.toString)
     val (count, started, time) = duration2 {
       input.count()
     }
     logInfo(s" size of $source = $count rows read in $time nS")
-    assert(ExpectedSceneListLines <= count,
-      s"Number of rows in $source [$count] less than expected value $ExpectedSceneListLines")
+    assert(lines <= count,
+      s"Number of rows in $source [$count] less than expected value $lines")
+    count
   }
 
-  ctest("CSVdiffFS", "Read compressed CSV differentFS", "") {
+  ctest("CSVdiffFS", "Read compressed CSV differentFS",
+    """Use a compressed CSV from the non-default FS.
+      | This verifies that the URIs are directing to the correct FS""".stripMargin) {
     sc = new SparkContext("local", "test", newSparkConf())
-    val source = sceneList
+    val source = SceneList
     val input = sc.textFile(source.toString)
     validateCSV(sc, source)
     logInfo(s"Filesystem statistics ${getFS(source)}")
@@ -151,7 +168,7 @@ private[spark] class S3aIOSuite extends CloudSuite {
       |
       | Note also the cost of `readFully()`; this method call is common inside libraries
       | like Orc and Parquet.""".stripMargin) {
-    val source = sceneList
+    val source = SceneList
     val fs = getFS(source)
     FileSystem.clearStatistics
     val stats = FileSystem.getStatistics("s3a", fs.getClass)
@@ -213,9 +230,9 @@ private[spark] class S3aIOSuite extends CloudSuite {
 
   ctest("ReadBytesReturned", "Read Bytes",
     """Read in blocks and assess their size and duration.
-      | This is to identify buffering quirks
+      | This is to identify buffering quirks.
     """.stripMargin) {
-    val source = sceneList
+    val source = SceneList
     val fs = getFS(source)
     val blockSize = 8192
     val buffer = new Array[Byte](blockSize)
@@ -244,7 +261,6 @@ private[spark] class S3aIOSuite extends CloudSuite {
         results += sample
       }
     }
-        // completion
     logInfo(
       s"""$blocks blocks of size $blockSize;
          | total #of read operations $readOperations;
@@ -290,6 +306,15 @@ private[spark] class S3aIOSuite extends CloudSuite {
   }
 }
 
+/**
+ * A sample of a read
+ * @param started start time in nS
+ * @param duration duration nS
+ * @param blockSize size of block worked with
+ * @param bytesRequested how many bytes were requested
+ * @param bytesRead how many bytes were actually returned
+ * @param pos position in the object where the read was requested.
+ */
 private class ReadSample(
     val started: Long,
     val duration: Long,
