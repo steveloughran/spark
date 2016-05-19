@@ -65,11 +65,13 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-test-tags_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-mllib_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>net.java.dev.jets3t</groupId>
@@ -129,20 +131,16 @@
             <artifactId>hadoop-aws</artifactId>
             <scope>${hadoop.deps.scope}</scope>
           </dependency>
-<!--
           <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-azure</artifactId>
             <scope>${hadoop.deps.scope}</scope>
           </dependency>
--->
-<!--
           <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-openstack</artifactId>
             <scope>${hadoop.deps.scope}</scope>
           </dependency>
--->
         </dependencies>
     </profile>
     

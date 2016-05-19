@@ -35,7 +35,10 @@ private[spark] class S3aIOSuite extends CloudSuite {
 
   val SceneList = new Path(S3_CSV_PATH)
 
-  /** number of lines, from `gunzip` + `wc -l` on day tested. This grows over time*/
+  /**
+   * Minimum number of lines, from `gunzip` + `wc -l` on day of first teste.
+   * This grows over time.
+   */
   val ExpectedSceneListLines = 447919
 
   override def enabled: Boolean = super.enabled && conf.getBoolean(AWS_TESTS_ENABLED, false)
