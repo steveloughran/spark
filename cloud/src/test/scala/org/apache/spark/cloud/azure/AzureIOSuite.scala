@@ -15,16 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.spark.cloud.s3
+package org.apache.spark.cloud.azure
 
 import org.apache.spark.cloud.common.BasicIOTests
 
-private[cloud] class S3aIOSuite extends BasicIOTests with S3aTestSetup {
+private[cloud] class AzureIOSuite extends BasicIOTests with AzureTestSetup {
 
   init()
 
   def init(): Unit = {
-    // propagate S3 credentials
+    // propagate credentials
     if (enabled) {
       initFS()
     }

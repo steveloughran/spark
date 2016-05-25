@@ -40,6 +40,10 @@ private[cloud] abstract class BasicIOTests extends CloudSuite {
     filesystem.mkdirs(path)
     val st = stat(path)
     logInfo(s"Created filesystem entry $path: $st")
+    val files = filesystem.listFiles(path, true)
+
+
+    // delete then verify that it is gone
     filesystem.delete(path, true)
     intercept[FileNotFoundException] {
       val st2 = stat(path)

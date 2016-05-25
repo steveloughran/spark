@@ -54,7 +54,6 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
     }
   }
 
-  val TEST_ENTRY_COUNT = 1000
 
   /**
    * The configuration as loaded; may be undefined.
@@ -94,11 +93,15 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
    */
   protected def filesystemURI = filesystem.getUri
 
+  private val scaleSizeFactor = conf.getInt(SCALE_TEST_SIZE_FACTOR, SCALE_TEST_SIZE_FACTOR_DEFAULT)
+  private val scaleOperationCount = conf.getInt(SCALE_TEST_OPERATION_COUNT,
+    SCALE_TEST_OPERATION_COUNT_DEFAULT)
+
   /**
    * Subclasses may override this for different or configurable test sizes
    * @return the number of entries in parallelized operations.
    */
-  protected def testEntryCount: Int = TEST_ENTRY_COUNT
+  protected def testEntryCount = 10 * scaleSizeFactor
 
   /** this system property is always set in a JVM */
   protected val localTmpDir = new File(System.getProperty("java.io.tmpdir", "/tmp"))
@@ -109,7 +112,7 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
    * @return the keys
    */
   private def extractTestKeys(): Set[String] = {
-    val property = System.getProperty(TEST_METHOD_KEYS, "")
+    val property = System.getProperty(SYSPROP_TEST_METHOD_KEYS, "")
     val splits = property.split(',')
     var s: Set[String] = Set()
     for (elem <- splits) {

@@ -54,9 +54,9 @@ private[spark] trait CloudTestKeys {
   val SYSPROP_TEST_UNIQUE_FORK_ID = "test.unique.fork.id"
 
   /**
-   * Optional method for test keys; if set, built into a map of test to run.
+   * Optional system property for test keys; if set, built into a map of test to run.
    */
-  val TEST_METHOD_KEYS = "test.method.keys"
+  val SYSPROP_TEST_METHOD_KEYS = "test.method.keys"
 
   /**
    * Name of the configuration file to load for test configuration.
@@ -70,11 +70,19 @@ private[spark] trait CloudTestKeys {
   val CLOUD_TEST_UNSET_STRING = "(unset)"
 
   /**
-   * Key defining the Are AWS tests enabled? If set, the user
-   * must have AWS login credentials, defined via the environment
-   * or in the XML test configuration file.
+   * Prefix for scale tests
    */
-  val S3A_TESTS_ENABLED = "s3a.tests.enabled"
+  val SCALE_TEST = "scale.test."
+
+  val SCALE_TEST_OPERATION_COUNT = SCALE_TEST + "operation.count"
+  val SCALE_TEST_OPERATION_COUNT_DEFAULT = 10
+
+  /**
+   * Scale factor as a percentage of "default" load. Test runners may wish to scale
+   * this down as well as up.
+   */
+  val SCALE_TEST_SIZE_FACTOR = SCALE_TEST + "size.factor"
+  val SCALE_TEST_SIZE_FACTOR_DEFAULT = 100
 
   /**
    * Key defining the Amazon Web Services Account.
@@ -87,6 +95,13 @@ private[spark] trait CloudTestKeys {
    * this to any output.
    */
   val AWS_ACCOUNT_SECRET = Constants.SECRET_KEY
+
+  /**
+   * Key defining the Are AWS tests enabled? If set, the user
+   * must have AWS login credentials, defined via the environment
+   * or in the XML test configuration file.
+   */
+  val S3A_TESTS_ENABLED = "s3a.tests.enabled"
 
   /**
    * A test bucket for S3.
@@ -103,6 +118,18 @@ private[spark] trait CloudTestKeys {
   /**
    * Default source of a public multi-MB CSV file.
    */
-  val DEFAULT_S3A_CSV_PATH = "s3a://landsat-pds/scene_list.gz"
+  val S3A_CSV_PATH_DEFAULT = "s3a://landsat-pds/scene_list.gz"
 
+  /**
+   * Key defining the Are AWS tests enabled? If set, the user
+   * must have AWS login credentials, defined via the environment
+   * or in the XML test configuration file.
+   */
+  val AZURE_TESTS_ENABLED = "azure.tests.enabled"
+
+  /**
+   * A test bucket for Azure.
+   * Data in this bucket under the test directory will be deleted during test suite teardowns;
+   */
+  val AZURE_TEST_URI = "azure.test.uri"
 }

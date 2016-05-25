@@ -29,10 +29,10 @@ import org.apache.spark.mllib.stat.{MultivariateStatisticalSummary, Statistics}
 /**
  * A suite of tests reading in the S3A CSV file.
  */
-private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
+private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
 
   val CSV_TESTFILE: Option[Path] = {
-    val pathname = conf.get(S3A_CSVFILE_PATH, DEFAULT_S3A_CSV_PATH)
+    val pathname = conf.get(S3A_CSVFILE_PATH, S3A_CSV_PATH_DEFAULT)
     if (!pathname.isEmpty) Some(new Path(pathname)) else None
   }
 
@@ -51,7 +51,7 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
   def init(): Unit = {
     // propagate S3 credentials
     if (enabled) {
-      initS3A
+      initFS()
     }
   }
 

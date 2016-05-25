@@ -15,21 +15,26 @@
  * limitations under the License.
  */
 
-package org.apache.spark.cloud.s3
+package org.apache.spark.cloud.azure
 
-import org.apache.spark.cloud.common.BasicIOTests
+import java.net.URI
 
-private[cloud] class S3aIOSuite extends BasicIOTests with S3aTestSetup {
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.s3a.Constants
 
-  init()
+import org.apache.spark.cloud.CloudSuite
 
-  def init(): Unit = {
-    // propagate S3 credentials
-    if (enabled) {
-      initFS()
-    }
+/**
+ * Trait for S3A tests
+ */
+trait AzureTestSetup extends CloudSuite {
+
+  override def enabled: Boolean = super.enabled && conf.getBoolean(AZURE_TESTS_ENABLED, false)
+
+  def initFS(): FileSystem = {
+    conf.set(Constants.BUFFER_DIR, localTmpDir.getAbsolutePath)
+    val uri = new URI(requiredOption(AZURE_TEST_URI))
+    logDebug(s"Executing S3 tests against $uri")
+    createFilesystem(uri)
   }
-
 }
-
-

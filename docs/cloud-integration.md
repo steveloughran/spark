@@ -22,24 +22,42 @@ title: Integration with Cloud Infrastructures
 
 ## Introduction
 
-Apache Spark
+Apache Spark can use cloud object stores as a source or destination of data. It does so
+through filesystem connectors implemented in apache Hadoop. Provided the relevant libraries
+are on the classpath, a file can be referenced simply via its URL
 
-## Important: Cloud object stores are not like filesystems
+```scala
+sparkContext.textFile("s3a://landsat-pds/scene_list.gz").count()
+```
 
+Similarly, an RDD can be saved to an object store via `saveAsTextFile()`
+
+
+```scala
+val numbers = sparkContext.parallelize(1 to 1000)
+numbers.textFile("swift://publicdataset/updates")
+numbers.textFile("wasb://landsat@example.blob.core.windows.net/updates")
+```
+
+While they can be used as the source and destination of data, they cannot be
+used as a direct replacement for a cluster-wide filesystem, such as HDFS.
+This is important to know, as the fact they are easy to work with can be misleading.
+
+## Cloud object stores are not filesystems
 
 Object stores are not filesystems: they are not a hierarchical tree of directories and files.
 
 The Hadoop filesystem APIs offer a filesystem API to the object stores, but underneath
 they are still object stores, [and the difference is significant](http://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/filesystem/introduction.html)
 
-In particular, the following behaviours are not normally those of a filesysem
+Many behaviors expected of a filesystem are emulated in the object store APIs, but only
+imperfectly.
 
 ### Directory operations may not be atomic nor fast
 
 Directory rename and delete may be performed as a series of operations on the client. Specifically,
 `delete(path, recursive=true)` may be implemented as "list the objects, delete them singly or in batches".
 `rename(source, dest)` may be implemented as "copy all the objects" followed by the delete operation.
-
 
 1. They may fail part way through, leaving the status of the filesystem "undefined".
 1. The time to delete may be `O(files)`
@@ -48,7 +66,8 @@ each file will depend upon the bandwidth between client and the filesystem. The 
 is, the longer the rename will take.
 
 Because of these behaviours, committing of work by renaming directories is neither efficient nor
-reliable. There is a special output committer for Parquet, the `org.apache.spark.sql.execution.datasources.parquet.DirectParquetOutputCommitter`
+reliable. There is a special output committer for Parquet,
+the `org.apache.spark.sql.execution.datasources.parquet.DirectParquetOutputCommitter`
 which bypasses the rename phase.
 
 
@@ -60,7 +79,7 @@ corrupted.
 state if a "Direct" output committer is used and executors fail.
 
 
-### Data is not written until the output stream's `close()` operation.
+### Data may not be written until the output stream's `close()` operation.
 
 Data to be written to the object store is usually buffered to a local file or stored in memory,
 until one of: there is enough data to create a partition in a multi-partitioned upload (where enabled),
@@ -71,7 +90,7 @@ or when the output stream's `close()` operation is done.
 - There may not be an entry in the object store for the file (even a 0 byte one) until
 that stage.
 
-### An object store's eventual consistency may be visible, especially when updating or deleting data.
+### An object store may display eventual consistency
 
 Object stores are often *Eventually Consistent*. This can surface, in particular:-
 
@@ -85,19 +104,68 @@ could return a 404 response, which Hadoop maps to a `FileNotFoundException`. Thi
 —see [S3 Consistency Model](http://docs.aws.amazon.com/AmazonS3/latest/dev/Introduction.html#ConsistencyModel)
 for the full details.
 
+### Read operations may be significantly slower than normal filesystem operations.
+
+Object stores usually implement their APIs as HTTP operations; clients make HTTP(S) requests
+and block for responses. Each of these calls can be expensive. For maximum performance
+
+1. Try to list filesystem paths in bulk.
+1. Know that `FileSystem.getFileStatus()` is expensive: cache the results rather than repeat
+the call (or wrapper methods such as `FileSystem.exists(), isDirectory() or isFile()`).
+1. Try to forward seek through a file, rather than backwards.
+1. Avoid renaming files: This is slow and, if it fails, may fail leave the destination in a mess.
+1. Use the local filesystem as the destination of output which you intend to reload in follow-on work.
+Retain the object store as the final destination of persistent output, not as a replacement for
+HDFS.
+
+
+## Object stores and their library dependencies
+
+The different object stores supported by Spark depend on specific Java libraries.
+
+
+### Amazon S3 with s3a://
+
+The "S3A" filesystem is a connector with Amazon S3, initially implemented in Hadoop 2.6, and
+considered ready for production use in Hadoop 2.7.
+
+The implementation is `hadoop-aws`, which is included in the `spark-assembly` JAR when spark
+is built against Hadoop 2.6 or later.
+
+Dependencies: `amazon-aws-sdk` JAR (Hadoop 2.6 and 2.7); `amazon-s3-sdk` and `amazon-core-sdk`
+in Hadoop 2.8. *Warning*: The Amazon JARs have proven very brittle —the version of the Amazon
+libraries must match that which the Hadoop binaries were built against.
+
+### Amazon S3 with s3n://
+
+The "S3N" filesystem connector is a long-standing connector shipping with all versions of Hadoop 2.
+It uses the `jets3t` library to talk to HDFS; this must be on the classpath.
+
+### Microsoft Azure with wasb://
+
+The `wasb` filesystem connector is implemented in `hadoop-aws` and built into the `spark-assembly`
+JAR. It needs the `azure-storage` JAR on the classpath.
+
+It is only present if Spark was built against Hadoop 2.7 or later.
+
+### Openstack Swift
+
 
 ## Testing Cloud integration
+
+The `spark-cloud` module contains tests which can run against the object stores. These verify
+functionality integration and performance.
 
 ### Example Configuration for testing cloud data
 
 
-Single test configuration
+This is a configuration enabling the S3A and Azure test, referencing the secret credentials
+kept in another file.
 
 ```xml
 <configuration>
   <include xmlns="http://www.w3.org/2001/XInclude"
     href="file:///home/hadoop/.ssh/auth-keys.xml"/>
-
 
   <property>
     <name>aws.tests.enabled</name>
@@ -111,11 +179,22 @@ Single test configuration
     <description>S3A path to a bucket which the test runs are free to write, read and delete
     data.</description>
   </property>
+
+  <property>
+    <name>azure.tests.enabled</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <name>azure.test.uri</name>
+    <value>wasb://MYCONTAINER@TESTACCOUNT.blob.core.windows.net</value>
+  </property>
+
 </configuration>
 ```
 
-This configuration uses XInclude to pull in the secret credentials for the account
-from the user's `~/.ssh/auth-keys.xml` file:
+The configuration uses XInclude to pull in the secret credentials for the account
+from the user's `/home/hadoop/.ssh/auth-keys.xml` file:
 
 ```xml
 <configuration>
@@ -123,10 +202,13 @@ from the user's `~/.ssh/auth-keys.xml` file:
     <name>fs.s3a.access.key</name>
     <value>USERKEY</value>
   </property>
-
   <property>
     <name>fs.s3a.secret.key</name>
-    <value>if.this.key.ever.leaks, reset it in the AWS console</value>
+    <value>SECRET_AWS_KEY</value>
+  </property>
+  <property>
+    <name>fs.azure.account.key.TESTACCOUNT.blob.core.windows.net</name>
+    <value>SECRET_AZURE_KEY</value>
   </property>
 </configuration>
 ```
@@ -186,8 +268,11 @@ mvn test -Phadoop-2.7 -Dcloud.test.configuration.file=cloud.xml -Dtest.method.ke
 # running the test purely in the S3A suites
 mvn test -Phadoop-2.7 -DwildcardSuites=org.apache.spark.cloud.s3.S3aIOSuite -Dcloud.test.configuration.file=cloud.xml
 
-# running two named tests
+# running two named tests across all filesystems
 mvn test -Phadoop-2.7 -Dcloud.test.configuration.file=cloud.xml -Dtest.method.keys=NewHadoopAPI,CSVgz
+
+# test run against Hadoop "branch-2"
+mvt -Phadoop-2.7  -Dcloud.test.configuration.file=../cloud.xml -Dhadoop.version=2.9.0-SNAPSHOT
 ```
 
 The combination of scalatest naming via the `wildcardSuites` property with the test-case specific
@@ -209,7 +294,7 @@ within the module
 1. Support parallel operation.
 1. Do not assume that any test has exclusive access to any part of an object store other
 than the specific test directory. This is critical to support parallel test execution.
-
+1. Share setup costs across test cases, especially for slow directory/file setup operations.
 
 
 ## Test costs
