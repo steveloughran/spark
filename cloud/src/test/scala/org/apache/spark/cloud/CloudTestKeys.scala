@@ -49,14 +49,19 @@ import org.apache.hadoop.fs.s3a.Constants
 private[spark] trait CloudTestKeys {
 
   /**
-   * Optional method for test keys; if set, built into a map of test to run
+   * A system property which will be set on parallel test runs
+   */
+  val SYSPROP_TEST_UNIQUE_FORK_ID = "test.unique.fork.id"
+
+  /**
+   * Optional method for test keys; if set, built into a map of test to run.
    */
   val TEST_METHOD_KEYS = "test.method.keys"
 
   /**
-   * Name of the configuration file to load for test configuration
+   * Name of the configuration file to load for test configuration.
    */
-  val CLOUD_TEST_CONFIGURATION_FILE = "cloud.test.configuration.file"
+  val SYSPROP_CLOUD_TEST_CONFIGURATION_FILE = "cloud.test.configuration.file"
 
   /**
    * Maven doesn't pass down empty properties as strings; it converts them to the string "null".
@@ -65,33 +70,40 @@ private[spark] trait CloudTestKeys {
   val CLOUD_TEST_UNSET_STRING = "(unset)"
 
   /**
-   * Are AWS tests enabled? If set, the user
-   * must have AWS login credentials, either via the environment
-   * or from properties in the test properties file.
+   * Key defining the Are AWS tests enabled? If set, the user
+   * must have AWS login credentials, defined via the environment
+   * or in the XML test configuration file.
    */
-  val AWS_TESTS_ENABLED = "aws.tests.enabled"
+  val S3A_TESTS_ENABLED = "s3a.tests.enabled"
 
   /**
-   * Amazon Web Services Account
+   * Key defining the Amazon Web Services Account.
    */
   val AWS_ACCOUNT_ID = Constants.ACCESS_KEY
 
   /**
-   * Amazon Web Services account secret.
+   * Key defining the Amazon Web Services account secret.
    * This is the value which must be reset if it is ever leaked. The tests *must not* log
    * this to any output.
    */
   val AWS_ACCOUNT_SECRET = Constants.SECRET_KEY
 
   /**
-   * A test bucket for S3. All data in this bucket will be deleted during test suite teardowns;
+   * A test bucket for S3.
+   * Data in this bucket under the test directory will be deleted during test suite teardowns;
    */
-  val S3_TEST_URI = "s3a.test.uri"
+  val S3A_TEST_URI = "s3a.test.uri"
 
   /**
-   * Source of a public multi-MB CSV file
+   * Key referring to the csvfile. If unset, use `DEFAULT_S3A_CSV_PATH`. If empty, tests
+   * depending upon the CSV file will be skipped.
    */
-  val S3_CSV_PATH = "s3a://landsat-pds/scene_list.gz"
-  // "s3a://landsat-pds.s3.amazonaws.com/scene_list.gz"
+  val S3A_CSVFILE_PATH = "s3a.test.csvfile.path"
+
+  /**
+   * Default source of a public multi-MB CSV file.
+   */
+  val DEFAULT_S3A_CSV_PATH = "s3a://landsat-pds/scene_list.gz"
+
 
 }

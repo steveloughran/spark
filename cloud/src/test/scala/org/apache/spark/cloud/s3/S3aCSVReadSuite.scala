@@ -28,10 +28,12 @@ import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FSDataInputStream, F
 import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
 import org.apache.spark.cloud.common.{CloudIOTests, ReadSample}
-import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.stat.{MultivariateStatisticalSummary, Statistics}
 
-private[cloud] class S3aIOSuite extends CloudIOTests with S3aTests {
+/**
+ * A suite of tests reading in the S3A CSV file.
+ */
+private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
 
   val CSV_TESTFILE: Option[Path] = {
     val pathname = conf.get(S3A_CSVFILE_PATH, DEFAULT_S3A_CSV_PATH)
@@ -46,7 +48,6 @@ private[cloud] class S3aIOSuite extends CloudIOTests with S3aTests {
    */
   val ExpectedSceneListLines = 447919
 
-  override def enabled: Boolean = super.enabled && conf.getBoolean(S3A_TESTS_ENABLED, false)
 
   init()
 

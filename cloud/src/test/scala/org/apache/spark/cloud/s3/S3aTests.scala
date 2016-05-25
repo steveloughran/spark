@@ -17,34 +17,13 @@
 
 package org.apache.spark.cloud.s3
 
-import com.amazonaws.services.s3.S3ClientOptions
-import org.apache.hadoop.fs.s3a.S3AFileSystem
-import org.apache.hadoop.fs.s3native.NativeS3FileSystem
-import org.jets3t.service.S3ServiceException
-
-import org.apache.spark.SparkFunSuite
+import org.apache.spark.cloud.CloudSuite
 
 /**
- * Force load in hadoop s3n/s3a classes and some dependencies.
- * Dependency problems should be picked up at compile time; runtime may
- * identify problems with any other transitive library
+ * Trait for S3A tests
  */
-private[cloud] class DependencyCheckSuite extends SparkFunSuite {
+trait S3aTests extends CloudSuite {
 
-  test("Create Jets3t class") {
-    new S3ServiceException("jets3t")
-  }
-
-  test("Create Amazon s3 class") {
-    new S3ClientOptions
-  }
-
-  test("Create s3n class") {
-    new NativeS3FileSystem
-  }
-
-  test("Create s3a class") {
-    new S3AFileSystem
-  }
+  override def enabled: Boolean = super.enabled && conf.getBoolean(S3A_TESTS_ENABLED, false)
 
 }

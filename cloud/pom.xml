@@ -39,7 +39,11 @@
 
     Hadoop 2.5 and earlier: jets3t.
     Hadoop 2.6: hadoop-aws and aws-java-sdk JARs
-    Hadoop 2.7+: hadoop-aws, aws-java-sdk-s3, hadoop-azure and azure-storage JARs
+    Hadoop 2.7+:
+      hadoop-aws
+      aws-java-sdk-s3
+      hadoop-azure
+      azure-storage
 
     WARNING: the signatures of methods in aws-java-sdk/aws-java-sdk-s3 can change between versions:
     use the same version against which Hadoop was compiled.
@@ -129,6 +133,12 @@
           <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-aws</artifactId>
+            <scope>${hadoop.deps.scope}</scope>
+          </dependency>
+          <!-- AWS SDK 10.6+ needs this in sync with Spark's Jackson 2 version. -->
+          <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-cbor</artifactId>
             <scope>${hadoop.deps.scope}</scope>
           </dependency>
           <dependency>

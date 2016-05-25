@@ -51,15 +51,20 @@ Because of these behaviours, committing of work by renaming directories is neith
 reliable. There is a special output committer for Parquet, the `org.apache.spark.sql.execution.datasources.parquet.DirectParquetOutputCommitter`
 which bypasses the rename phase.
 
+
 *Critical* speculative execution does not work against object
 stores which do not support atomic directory renames. Your output may get
-corrupted
+corrupted.
+
+*Warning* even non-speculative execution is at risk of leaving the output of a job in an inconsistent
+state if a "Direct" output committer is used and executors fail.
+
 
 ### Data is not written until the output stream's `close()` operation.
 
 Data to be written to the object store is usually buffered to a local file or stored in memory,
-until one of: there is enough data to crete a partition in a multi-partitioned upload, or
-when the output stream's `close()` operation is done.
+until one of: there is enough data to create a partition in a multi-partitioned upload (where enabled),
+or when the output stream's `close()` operation is done.
 
 - If the process writing the data fails, nothing may have been written.
 - Data may be visible in the object store until the entire output stream is complete
@@ -72,7 +77,8 @@ Object stores are often *Eventually Consistent*. This can surface, in particular
 
 - When listing "a directory"; newly created files may not yet be visible, deleted ones still present.
 - After updating an object: opening and reading the object may still return the previous data.
-- After deleting an obect: opening it may succeed, returning the data
+- After deleting an obect: opening it may succeed, returning the data.
+- While reading an object, if it is updated or deleted during the process.
 
 For many years, Amazon US East S3 lacked create consistency: attempting to open a newly created object
 could return a 404 response, which Hadoop maps to a `FileNotFoundException`. This was fixed in August 2015
@@ -126,7 +132,7 @@ from the user's `~/.ssh/auth-keys.xml` file:
 ```
 
 Splitting the secret values out of the other XML files allows for the other files to
-be managed via SCM and/or shared, without risk.
+be managed via SCM and/or shared, with reduced risk.
 
 
 ## Large dataset input tests
@@ -134,17 +140,76 @@ be managed via SCM and/or shared, without risk.
 Some tests read from large datasets; some simple IO of a multi GB source file,
 followed by actual parsing operations of CSV files.
 
-When testing against Amazon s3, their [public datasets](https://aws.amazon.com/public-data-sets/)
+### Amazon S3 test datasets
+
+When testing against Amazon S3, their [public datasets](https://aws.amazon.com/public-data-sets/)
 are used. Specifically
 
 * Large object input.
-* CSV parsing: http://landsat-pds.s3.amazonaws.com/scene_list.gz
- that is: s3a://landsat-pds/scene_list.gz
-
-Amazon provide
+* CSV parsing: `http://landsat-pds.s3.amazonaws.com/scene_list.gz`, which can be referenced
+as an S3A file as `s3a://landsat-pds/scene_list.gz`
 
 
-https://s3.amazonaws.com/datasets.elasticmapreduce/
+## Running a single test case
+
+Each cloud test takes time; it is convenient to be able to work on a single test case at a time
+when implementing or debugging a test.
+
+Every test has a *key* name which SHOULD BE unique within the specific test class; it MAY BE
+even across the entire module —though this does not hold for subclassed tests.
+
+As an example, here is a test create and save a test data to an object store using the
+Hadoop filesystem API via the RDD function `saveAsNewAPIHadoopFile()`
+
+```scala
+
+  ctest("NewHadoopAPI", "New Hadoop API",
+    "Use SparkContext.saveAsNewAPIHadoopFile() to save data to a file") {
+    sc = new SparkContext("local", "test", newSparkConf())
+    val numbers = sc.parallelize(1 to testEntryCount)
+    val example1 = new Path(TestDir, "example1")
+    saveAsTextFile(numbers, example1, sc.hadoopConfiguration)
+  }
+```
+
+The test is defined with a key, `NewHadoopAPI`, a name for the XML/HTML reports,
+`New Hadoop API`, and a description for logging (and perhaps future XML reports).
+
+
+This method can be exclusively executed by passing it to maven in the property `test.method.keys`
+
+```
+
+# running all (possibly subclassed) instantations of this method in scalatest suites.
+mvn test -Phadoop-2.7 -Dcloud.test.configuration.file=cloud.xml -Dtest.method.keys=NewHadoopAPI
+
+# running the test purely in the S3A suites
+mvn test -Phadoop-2.7 -DwildcardSuites=org.apache.spark.cloud.s3.S3aIOSuite -Dcloud.test.configuration.file=cloud.xml
+
+# running two named tests
+mvn test -Phadoop-2.7 -Dcloud.test.configuration.file=cloud.xml -Dtest.method.keys=NewHadoopAPI,CSVgz
+```
+
+The combination of scalatest naming via the `wildcardSuites` property with the test-case specific
+key allows developers to easily focus on the failure or performance issues of a single test case
+within the module
+
+## Best practices for adding a new test
+
+1. Use the `ctest()` declaration of a test case conditional on the suite being enabled.
+1. Give it a uniqe key using upper-and-lower-case letters and numerals only.
+1. Give it a name useful in test reports/bug reports
+1. Give it a meaningful description.
+
+
+## Best practices for adding a new test suite
+
+1. Extend `CloudSuite`
+1. Have an `after {}` clause which cleans up all object stores —this keeps costs down.
+1. Support parallel operation.
+1. Do not assume that any test has exclusive access to any part of an object store other
+than the specific test directory. This is critical to support parallel test execution.
+
 
 
 ## Test costs

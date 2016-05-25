@@ -25,7 +25,7 @@ import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FSDataInputStream, FileStatus, FileSystem, LocalFileSystem, Path}
+import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FileStatus, FileSystem, LocalFileSystem, Path}
 import org.apache.hadoop.io.{NullWritable, Text}
 import org.scalatest.{BeforeAndAfter, Matchers}
 
@@ -38,21 +38,61 @@ import org.apache.spark.{LocalSparkContext, SparkConf, SparkFunSuite}
  * options to enable/disable tests, and a mechanism to conditionally declare tests
  * based on these details
  */
-private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with LocalSparkContext
-    with BeforeAndAfter with Matchers {
+private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKeys
+    with LocalSparkContext with BeforeAndAfter with Matchers {
 
   /**
    *  Work under a test directory, so that cleanup works.
    * ...some of the object stores don't implement `delete("/",true)`
    */
-  protected val TestDir = new Path("/test")
-  val TEST_ENTRY_COUNT = 1000
-  protected val conf = loadConfiguration()
+  protected val TestDir: Path = {
+    val testUniqueForkId: String = System.getProperty(SYSPROP_TEST_UNIQUE_FORK_ID)
+    if (testUniqueForkId == null) {
+      new Path("/test")
+    } else {
+      new Path("/" + testUniqueForkId, "test")
+    }
+  }
 
-  private var _filesystem: Option[FileSystem] = None
-  protected def filesystem: Option[FileSystem] = _filesystem
-  protected def fsURI = _filesystem.get.getUri
+  val TEST_ENTRY_COUNT = 1000
+
+  /**
+   * The configuration as loaded; may be undefined.
+   */
+  protected val testConfiguration = loadConfiguration()
+
+  /**
+   * Accessor to the configuration, which mist be non-empty.
+   */
+  protected val conf: Configuration = testConfiguration.get
+
+  /**
+   * Map of keys defined on the command line.
+   */
   private val testKeyMap = extractTestKeys()
+
+  /**
+   * The filesystem.
+   */
+  private var _filesystem: Option[FileSystem] = None
+
+  /**
+   * Accessor for the filesystem.
+   * @return the filesystem
+   */
+  protected def filesystem: FileSystem = _filesystem.get
+
+  /**
+   * Probe for the filesystem being defined.
+   * @return
+   */
+  protected def isFilesystemDefined: Boolean = _filesystem.isDefined
+
+  /**
+   * URI to the filesystem
+   * @return the filesystem URI
+   */
+  protected def filesystemURI = filesystem.getUri
 
   /**
    * Subclasses may override this for different or configurable test sizes
@@ -85,22 +125,29 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
   }
 
   /**
-   * Is a specific test enabled
+   * Is a specific test enabled?
    * @param key test key
-   * @return true if there were no test keys name, or, if there were, is this key in the list
+   * @return true if there were no test keys named, or, if there were, that this key is in the list
    */
   def isTestEnabled(key: String): Boolean = {
     testKeyMap.isEmpty || testKeyMap.contains(key)
   }
 
   /**
-   * A conditional test which is only executed when the suite is enabled
+   * A conditional test which is only executed when the suite is enabled, the test key
+   * is in the allowed list, and the `extraCondition` predicate holds.
    * @param summary description of the text
    * @param testFun function to evaluate
+   * @param detail detailed text for diagnostics
+   * @param extraCondition extra predicate which may be evaluated to decide if a test can run.
    */
-  protected def ctest(key: String, summary: String, detail: String)(testFun: => Unit): Unit = {
+  protected def ctest(
+      key: String,
+      summary: String,
+      detail: String,
+      extraCondition: => Boolean = true)(testFun: => Unit): Unit = {
     val testText = key + ": " + summary
-    if (enabled && isTestEnabled(key)) {
+    if (enabled && isTestEnabled(key) && extraCondition) {
       registerTest(testText) {testFun}
     } else {
       registerIgnoredTest(summary) {testFun}
@@ -147,12 +194,10 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
    * Clean up the filesystem if it is defined.
    */
   protected def cleanFilesystem(): Unit = {
-    // sanity check: reject anything looking like a local FS
-    filesystem.foreach { fs =>
-      note(s"Cleaning ${fs.getUri}$TestDir")
-      if (!fs.delete(TestDir, true)) {
-        logWarning(s"Deleting ${fs.getUri}$TestDir returned false")
-      }
+    val target = s"${filesystem.getUri}$TestDir"
+    note(s"Cleaning $target")
+    if (filesystem.exists(TestDir) && !filesystem.delete(TestDir, true)) {
+      logWarning(s"Deleting $target returned false")
     }
   }
 
@@ -164,24 +209,28 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
       cleanFilesystem()
     } catch {
       case e: Exception =>
-        logInfo("During cleanup of filesystem: $e", e)
+        logInfo(s"During cleanup of filesystem: $e")
+        logDebug(s"During cleanup of filesystem", e)
     }
   }
 
-
-
   /**
-   * Enabled flag.
+   * Is this test suite enabled?
    * The base class is enabled if the configuration file loaded; subclasses can extend
-   * this with extra probes.
+   * this with extra probes, such as for bindings to an object store.
    *
    * If this predicate is false, then tests defined in `ctest()` will be ignored
    * @return true if the test suite is enabled.
    */
-  protected def enabled: Boolean = conf != null
+  protected def enabled: Boolean = testConfiguration.isDefined
 
-  protected def loadConfiguration(): Configuration = {
-    val filename = System.getProperty(CLOUD_TEST_CONFIGURATION_FILE, "")
+  /**
+   * Load the configuration file from the system property `SYSPROP_CLOUD_TEST_CONFIGURATION_FILE`.
+   * @return the configuration
+   * @throws FileNotFoundException if a configuration is named but not present.
+   */
+  protected def loadConfiguration(): Option[Configuration] = {
+    val filename = System.getProperty(SYSPROP_CLOUD_TEST_CONFIGURATION_FILE, "")
     logDebug(s"Configuration property = `$filename`")
     if (filename != null && !filename.isEmpty && !CLOUD_TEST_UNSET_STRING.equals(filename)) {
       val f = new File(filename)
@@ -189,13 +238,13 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
         logInfo(s"Loading configuration from $f")
         val c = new Configuration(false)
         c.addResource(f.toURI.toURL)
-        c
+        Some(c)
       } else {
         throw new FileNotFoundException(s"No file '$filename'" +
-            s" in property $CLOUD_TEST_CONFIGURATION_FILE")
+            s" in property $SYSPROP_CLOUD_TEST_CONFIGURATION_FILE")
       }
     } else {
-      null
+      None
     }
   }
 
@@ -213,18 +262,17 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
 
   /**
    * Create a spark conf, using the current filesystem as the URI for the default FS.
-   * All options loaded from the test configuration
-   * XML file will be added as hadoop options
+   * All options loaded from the test configuration XML file will be added as hadoop options.
    * @return the configuration
    */
   def newSparkConf(): SparkConf = {
-    require(filesystem.isDefined, "Not bonded to a test filesystem")
-    newSparkConf(fsURI)
+    require(isFilesystemDefined, "Not bonded to a test filesystem")
+    newSparkConf(filesystemURI)
   }
 
   /**
    * Create a spark conf. All options loaded from the test configuration
-   * XML file will be added as hadoop options
+   * XML file will be added as hadoop options.
    * @param uri the URI of the default filesystem
    * @return the configuration
    */
@@ -240,13 +288,18 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     sc
   }
 
+  /**
+   * Creat a new spark configuration under the test filesystem
+   * @param path path
+   * @return
+   */
   def newSparkConf(path: Path): SparkConf = {
     newSparkConf(path.getFileSystem(conf).getUri)
   }
 
 
   /**
-   * Measure the duration of an operation, log it with the text
+   * Measure the duration of an operation, log it with the text.
    * @param operation operation description
    * @param testFun function to execute
    * @return the result
@@ -258,12 +311,12 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     } finally {
       val end = nanos()
       val d = end - start
-      logInfo(s"Duration of $operation = ${toHuman(d)} ns")
+      logInfo(s"Duration of $operation = ${toHuman(d)}")
     }
   }
 
   /**
-   * Measure the duration of an operation, log it
+   * Measure the duration of an operation, log it.
    * @param testFun function to execute
    * @return the result and the operation duration in nanos
    */
@@ -283,6 +336,10 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     }
   }
 
+  /**
+   * Time in nanoseconds.
+   * @return the current time.
+   */
   def nanos(): Long = {
     System.nanoTime()
   }
@@ -294,8 +351,7 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
    * rather than the default one in the configuration ... this is addressed by creating a
    * new configuration
    */
-  def saveAsTextFile[T](rdd: RDD[T], path: Path, conf: Configuration)
-  : Unit = {
+  def saveAsTextFile[T](rdd: RDD[T], path: Path, conf: Configuration): Unit = {
     rdd.withScope {
       val nullWritableClassTag = implicitly[ClassTag[NullWritable]]
       val textClassTag = implicitly[ClassTag[Text]]
@@ -318,16 +374,32 @@ private[spark] class CloudSuite extends SparkFunSuite with CloudTestKeys with Lo
     }
   }
 
+  /**
+   * Get the file status of a path
+   * @param path path to query
+   * @return the status
+   * @throws FileNotFoundException if there is no entity there
+   */
   def stat(path: Path): FileStatus = {
-    filesystem.get.getFileStatus(path)
+    filesystem.getFileStatus(path)
   }
 
-  def getFS(path: Path): FileSystem = {
+  /**
+   * Get the filesystem to a path; uses the current configuration
+   * @param path path to use
+   * @return a (cached) filesystem.
+   */
+  def getFilesystem(path: Path): FileSystem = {
     FileSystem.get(path.toUri, conf)
   }
 
-  def toHuman(ns: Long): String = {
-    String.format(Locale.ENGLISH, "%,d", ns.asInstanceOf[Object])
+  /**
+   * Convert a time in nanoseconds into a human-readable form for logging
+   * @param durationNanos duration in nanoseconds
+   * @return a string describing the time
+   */
+  def toHuman(durationNanos: Long): String = {
+    String.format(Locale.ENGLISH, "%,d ns", durationNanos.asInstanceOf[Object])
   }
 
   /*  def readBytesToString(fs: FileSystem, path: Path, length: Int) : String  = {
