@@ -17,6 +17,11 @@
 
 package org.apache.spark.cloud.s3
 
+import java.net.URI
+
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.s3a.Constants
+
 import org.apache.spark.cloud.CloudSuite
 
 /**
@@ -26,4 +31,14 @@ trait S3aTests extends CloudSuite {
 
   override def enabled: Boolean = super.enabled && conf.getBoolean(S3A_TESTS_ENABLED, false)
 
+  def initS3A: FileSystem = {
+    val id = requiredOption(AWS_ACCOUNT_ID)
+    val secret = requiredOption(AWS_ACCOUNT_SECRET)
+    conf.set("fs.s3n.awsAccessKeyId", id)
+    conf.set("fs.s3n.awsSecretAccessKey", secret)
+    conf.set(Constants.BUFFER_DIR, localTmpDir.getAbsolutePath)
+    val s3aURI = new URI(requiredOption(S3A_TEST_URI))
+    logInfo(s"Executing S3 tests against $s3aURI")
+    createFilesystem(s3aURI)
+  }
 }

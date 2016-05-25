@@ -138,7 +138,7 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
    * is in the allowed list, and the `extraCondition` predicate holds.
    * @param summary description of the text
    * @param testFun function to evaluate
-   * @param detail detailed text for diagnostics
+   * @param detail detailed text for reports
    * @param extraCondition extra predicate which may be evaluated to decide if a test can run.
    */
   protected def ctest(
@@ -148,9 +148,14 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
       extraCondition: => Boolean = true)(testFun: => Unit): Unit = {
     val testText = key + ": " + summary
     if (enabled && isTestEnabled(key) && extraCondition) {
-      registerTest(testText) {testFun}
+      registerTest(testText) {
+        logInfo(testText + "\n" + detail + "\n-------------------------------------------")
+        testFun
+      }
     } else {
-      registerIgnoredTest(summary) {testFun}
+      registerIgnoredTest(testText) {
+        testFun
+      }
     }
   }
 
@@ -173,8 +178,8 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
    * @param fs new filesystem
    */
   protected def setFilesystem(fs: FileSystem): Unit = {
-      if (fs.isInstanceOf[LocalFileSystem] || "file" == fs.getScheme) {
-        throw new IllegalArgumentException("Test filesystem cannot be local filesystem")
+    if (fs.isInstanceOf[LocalFileSystem] || "file" == fs.getScheme) {
+      throw new IllegalArgumentException("Test filesystem cannot be local filesystem")
     }
     _filesystem = Some(fs)
   }
@@ -256,7 +261,7 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
    */
   protected def requiredOption(key: String): String = {
     val v = conf.getTrimmed(key)
-    require(v!=null && !v.isEmpty, s"Unset/empty configuration option $key")
+    require(v != null && !v.isEmpty, s"Unset/empty configuration option $key")
     v
   }
 
@@ -296,7 +301,6 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
   def newSparkConf(path: Path): SparkConf = {
     newSparkConf(path.getFileSystem(conf).getUri)
   }
-
 
   /**
    * Measure the duration of an operation, log it with the text.

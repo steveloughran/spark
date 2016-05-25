@@ -17,17 +17,13 @@
 
 package org.apache.spark.cloud.s3
 
-import java.io.FileNotFoundException
-import java.net.URI
-
 import scala.collection.mutable
 
-import org.apache.hadoop.fs.s3a.Constants
-import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FSDataInputStream, FileSystem, Path}
+import org.apache.hadoop.fs.{FSDataInputStream, FileSystem, Path}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
-import org.apache.spark.cloud.common.{CloudIOTests, ReadSample}
+import org.apache.spark.cloud.common.ReadSample
 import org.apache.spark.mllib.stat.{MultivariateStatisticalSummary, Statistics}
 
 /**
@@ -37,7 +33,7 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
 
   val CSV_TESTFILE: Option[Path] = {
     val pathname = conf.get(S3A_CSVFILE_PATH, DEFAULT_S3A_CSV_PATH)
-    if (!pathname.isEmpty)  Some(new Path(DEFAULT_S3A_CSV_PATH)) else None
+    if (!pathname.isEmpty) Some(new Path(pathname)) else None
   }
 
   def hasCSVTestFile = CSV_TESTFILE.isDefined
@@ -48,86 +44,20 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
    */
   val ExpectedSceneListLines = 447919
 
+  override def enabled: Boolean = super.enabled && hasCSVTestFile
 
   init()
 
   def init(): Unit = {
     // propagate S3 credentials
     if (enabled) {
-      val id = requiredOption(AWS_ACCOUNT_ID)
-      val secret = requiredOption(AWS_ACCOUNT_SECRET)
-      conf.set("fs.s3n.awsAccessKeyId", id)
-      conf.set("fs.s3n.awsSecretAccessKey", secret)
-      conf.set(Constants.BUFFER_DIR, localTmpDir.getAbsolutePath)
-      val s3aURI = new URI(requiredOption(S3A_TEST_URI))
-      logInfo(s"Executing S3 tests against $s3aURI")
-      createFilesystem(s3aURI)
+      initS3A
     }
   }
 
-  after {
-    cleanFilesystemInTeardown()
-  }
-
-  ctest("mkdirs", "Create, delete directory",
-    "Simple test of directory operations") {
-    val fs = filesystem
-    val path = TestDir
-    fs.mkdirs(path)
-    val st = stat(path)
-    logInfo(s"Created filesystem entry $path: $st")
-    fs.delete(path, true)
-    intercept[FileNotFoundException] {
-      val st2 = stat(path)
-      logError(s"Got status $st2")
-    }
-  }
-
-  ctest("FileOutput", "Generate then Read data -File Output Committer",
-    """Use the classic File Output Committer to commit work to S3A.
-      | This committer has race and failure conditions, with the commit being O(bytes)
-      | and non-atomic.
-    """.stripMargin) {
-    sc = new SparkContext("local", "test", newSparkConf())
-    val conf = sc.hadoopConfiguration
-    assert(filesystemURI.toString === conf.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY))
-    val entryCount = testEntryCount
-    val numbers = sc.parallelize(1 to entryCount)
-    val example1 = new Path(TestDir, "example1")
-    numbers.saveAsTextFile(example1.toString)
-    val st = stat(example1)
-    assert(st.isDirectory, s"Not a dir: $st")
-    val fs = filesystem
-    val children = fs.listStatus(example1)
-    assert(children.nonEmpty, s"No children under $example1")
-    children.foreach { child =>
-      logInfo(s"$child")
-      assert(child.getLen > 0 || child.getPath.getName === "_SUCCESS",
-        s"empty output $child")
-    }
-    val parts = children.flatMap { child =>
-      if (child.getLen > 0) Seq(child) else Nil
-    }
-    assert(parts.length === 1)
-    val parts0 = parts(0)
-    // now read it in
-    val input = sc.textFile(parts0.getPath.toString)
-    val results = input.collect()
-    assert(entryCount === results.length, s"size of results read in from $parts0")
-    logInfo(s"Filesystem statistics $fs")
-  }
-
-  ctest("NewHadoopAPI", "New Hadoop API",
-    "Use SparkContext.saveAsNewAPIHadoopFile() to save data to a file") {
-    sc = new SparkContext("local", "test", newSparkConf())
-    val numbers = sc.parallelize(1 to testEntryCount)
-    val example1 = new Path(TestDir, "example1")
-    saveAsTextFile(numbers, example1, sc.hadoopConfiguration)
-  }
-
-  ctest("CSVgz", "Read compressed CSV",
-    "Read compressed CSV files through the spark context",
-    hasCSVTestFile) {
+  ctest("CSVgz",
+    "Read compressed CSV",
+    "Read compressed CSV files through the spark context") {
     val source = CSV_TESTFILE.get
     sc = new SparkContext("local", "test", newSparkConf(source))
     val sceneInfo = getFilesystem(source).getFileStatus(source)
@@ -156,10 +86,10 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
     count
   }
 
-  ctest("CSVdiffFS", "Read compressed CSV differentFS",
+  ctest("CSVdiffFS",
+    "Read compressed CSV differentFS",
     """Use a compressed CSV from the non-default FS.
-      | This verifies that the URIs are directing to the correct FS""".stripMargin,
-    hasCSVTestFile) {
+      | This verifies that the URIs are directing to the correct FS""".stripMargin) {
     sc = new SparkContext("local", "test", newSparkConf())
     val source = CSV_TESTFILE.get
     val input = sc.textFile(source.toString)
@@ -167,7 +97,8 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
     logInfo(s"Filesystem statistics ${getFilesystem(source)}")
   }
 
-  ctest("SeekReadFully", "Cost of seek and ReadFully",
+  ctest("SeekReadFully",
+    "Cost of seek and ReadFully",
     """Assess cost of seek and read operations.
       | When moving the cursor in an input stream, an HTTP connection may be closed and
       | then re-opened. This can be very expensive; tactics like streaming forwards instead
@@ -178,8 +109,7 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
       | in the time to `close()` while at offset 0 being `O(len(file))`.
       |
       | Note also the cost of `readFully()`; this method call is common inside libraries
-      | like Orc and Parquet.""".stripMargin,
-    hasCSVTestFile) {
+      | like Orc and Parquet.""".stripMargin) {
     val source = CSV_TESTFILE.get
     val fs = getFilesystem(source)
     FileSystem.clearStatistics
@@ -240,32 +170,31 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
     logInfo(s"Statistics $stats")
   }
 
-  ctest("ReadBytesReturned", "Read Bytes",
+  ctest("ReadBytesReturned",
+    "Read Bytes",
     """Read in blocks and assess their size and duration.
       | This is to identify buffering quirks.
-    """.stripMargin,
-    hasCSVTestFile) {
+    """.stripMargin) {
     val source = CSV_TESTFILE.get
-    val fs = getFilesystem(source)
     val blockSize = 8192
     val buffer = new Array[Byte](blockSize)
     val returnSizes: mutable.Map[Int, (Int, Long)] = mutable.Map()
-    val stat = fs.getFileStatus(source)
-    val blocks = (stat.getLen/blockSize).toInt
-    val instream: FSDataInputStream = fs.open(source)
+    val stat = getFilesystem(source).getFileStatus(source)
+    val blocks = (stat.getLen / blockSize).toInt
+    val instream: FSDataInputStream = getFilesystem(source).open(source)
     var readOperations = 0
     var totalReadTime = 0L
     val results = new mutable.MutableList[ReadSample]()
     for (i <- 1 to blocks) {
       var offset = 0
-      while(offset < blockSize) {
+      while (offset < blockSize) {
         readOperations += 1
         val requested = blockSize - offset
         val pos = instream.getPos
         val (bytesRead, started, time) = duration2 {
           instream.read(buffer, offset, requested)
         }
-        assert(bytesRead> 0,  s"In block $i read from offset $offset returned $bytesRead")
+        assert(bytesRead > 0, s"In block $i read from offset $offset returned $bytesRead")
         offset += bytesRead
         totalReadTime += time
         val current = returnSizes.getOrElse(bytesRead, (0, 0L))
@@ -278,17 +207,17 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
       s"""$blocks blocks of size $blockSize;
          | total #of read operations $readOperations;
          | total read time=${toHuman(totalReadTime)};
-         | ${totalReadTime/(blocks * blockSize)} ns/byte""".stripMargin)
+         | ${totalReadTime / (blocks * blockSize)} ns/byte""".stripMargin)
 
 
     logInfo("Read sizes")
-    returnSizes.toSeq.sortBy(_._1).foreach { v  =>
+    returnSizes.toSeq.sortBy(_._1).foreach { v =>
       val returnedBytes = v._1
       val count = v._2._1
       val totalDuration = v._2._2
       logInfo(s"[$returnedBytes] count = $count" +
-          s" average duration = ${totalDuration/count}" +
-          s" nS/byte = ${totalDuration/(count * returnedBytes)}")
+          s" average duration = ${totalDuration / count}" +
+          s" nS/byte = ${totalDuration / (count * returnedBytes)}")
     }
 
     // spark analysis
@@ -299,10 +228,10 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTests {
         .reduceByKey((v1, v2) => v1 + v2)
         .sortBy(_._2, false)
     logInfo(s"Most frequent sizes:\n")
-    blockFrequency.toLocalIterator.foreach{ t =>
+    blockFrequency.toLocalIterator.foreach { t =>
       logInfo(s"[${t._1}]: ${t._2}\n")
     }
-    val resultsVector = resultsRDD.map( _.toVector)
+    val resultsVector = resultsRDD.map(_.toVector)
     val stats = Statistics.colStats(resultsVector)
     logInfo(s"Bytes Read ${summary(stats, 4)}")
     logInfo(s"Difference between requested and actual ${summary(stats, 7)}")

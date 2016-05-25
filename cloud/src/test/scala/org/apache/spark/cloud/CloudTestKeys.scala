@@ -105,5 +105,4 @@ private[spark] trait CloudTestKeys {
    */
   val DEFAULT_S3A_CSV_PATH = "s3a://landsat-pds/scene_list.gz"
 
-
 }
