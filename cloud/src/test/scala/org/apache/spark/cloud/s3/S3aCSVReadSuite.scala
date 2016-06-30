@@ -25,6 +25,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
 import org.apache.spark.cloud.common.ReadSample
 import org.apache.spark.mllib.stat.{MultivariateStatisticalSummary, Statistics}
+import org.apache.spark.util.Utils
 
 /**
  * A suite of tests reading in the S3A CSV file.
@@ -46,7 +47,6 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
   def init(): Unit = {
     setupFilesystemConfiguration(conf)
   }
-
 
   ctest("CSVgz",
     "Read compressed CSV",
@@ -79,11 +79,27 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
       s"Number of rows in $source [$count] less than expected value $lines")
     count
   }
+/*
+  override def beforeEach() {
+    super.beforeEach()
+    tempDir = Utils.createTempDir()
+  }
 
+  override def afterEach() {
+    try {
+      Utils.deleteRecursively(tempDir)
+    } finally {
+      super.afterEach()
+    }
+  }
+  */
   ctest("CSVdiffFS",
     "Read compressed CSV differentFS",
     """Use a compressed CSV from the non-default FS.
       | This verifies that the URIs are directing to the correct FS""".stripMargin) {
+
+
+
     sc = new SparkContext("local", "test", newSparkConf())
     val source = CSV_TESTFILE.get
     validateCSV(sc, source)
@@ -142,7 +158,7 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
     }
 
     // spark analysis
-    sc = new SparkContext("local", "test", newSparkConf())
+    sc = new SparkContext("local", "test", newSparkConf(source))
 
     val resultsRDD = sc.parallelize(results)
     val blockFrequency = resultsRDD.map(s => (s.blockSize, 1))
