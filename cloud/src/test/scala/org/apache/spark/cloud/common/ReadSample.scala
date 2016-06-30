@@ -40,7 +40,7 @@ private[cloud] class ReadSample(
 
   def delta: Int = { bytesRequested - bytesRead }
 
-  override def toString = s"ReadSample(started=$started, duration=$duration," +
+  override def toString: String = s"ReadSample(started=$started, duration=$duration," +
       s" blockSize=$blockSize, bytesRequested=$bytesRequested, bytesRead=$bytesRead)" +
       s" pos=$pos"
 

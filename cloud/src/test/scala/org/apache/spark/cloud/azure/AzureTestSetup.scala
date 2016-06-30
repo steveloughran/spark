@@ -20,19 +20,17 @@ package org.apache.spark.cloud.azure
 import java.net.URI
 
 import org.apache.hadoop.fs.FileSystem
-import org.apache.hadoop.fs.s3a.Constants
 
 import org.apache.spark.cloud.CloudSuite
 
 /**
  * Trait for S3A tests
  */
-trait AzureTestSetup extends CloudSuite {
+private[cloud] trait AzureTestSetup extends CloudSuite {
 
   override def enabled: Boolean = super.enabled && conf.getBoolean(AZURE_TESTS_ENABLED, false)
 
   def initFS(): FileSystem = {
-    conf.set(Constants.BUFFER_DIR, localTmpDir.getAbsolutePath)
     val uri = new URI(requiredOption(AZURE_TEST_URI))
     logDebug(s"Executing S3 tests against $uri")
     createFilesystem(uri)

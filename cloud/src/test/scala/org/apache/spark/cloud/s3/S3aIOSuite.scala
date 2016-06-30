@@ -19,9 +19,14 @@ package org.apache.spark.cloud.s3
 
 import org.apache.spark.cloud.common.BasicIOTests
 
+/**
+ * Basic S3A IO Tests
+ */
 private[cloud] class S3aIOSuite extends BasicIOTests with S3aTestSetup {
 
   init()
+
+  override def enabled: Boolean = super.enabled && conf.getBoolean(S3A_TESTS_ENABLED, false)
 
   def init(): Unit = {
     // propagate S3 credentials
@@ -31,5 +36,3 @@ private[cloud] class S3aIOSuite extends BasicIOTests with S3aTestSetup {
   }
 
 }
-
-

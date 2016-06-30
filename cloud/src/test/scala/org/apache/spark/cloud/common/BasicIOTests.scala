@@ -42,7 +42,6 @@ private[cloud] abstract class BasicIOTests extends CloudSuite {
     logInfo(s"Created filesystem entry $path: $st")
     val files = filesystem.listFiles(path, true)
 
-
     // delete then verify that it is gone
     filesystem.delete(path, true)
     intercept[FileNotFoundException] {
@@ -90,7 +89,9 @@ private[cloud] abstract class BasicIOTests extends CloudSuite {
     "Use SparkContext.saveAsNewAPIHadoopFile() to save data to a file") {
     sc = new SparkContext("local", "test", newSparkConf())
     val numbers = sc.parallelize(1 to testEntryCount)
-    val example1 = new Path(TestDir, "example1")
-    saveAsTextFile(numbers, example1, sc.hadoopConfiguration)
+    val destFile = new Path(TestDir, "example1")
+    saveAsTextFile(numbers, destFile, sc.hadoopConfiguration)
+    filesystem.getFileStatus(destFile)
   }
+
 }

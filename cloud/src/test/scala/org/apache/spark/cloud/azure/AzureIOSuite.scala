@@ -31,5 +31,3 @@ private[cloud] class AzureIOSuite extends BasicIOTests with AzureTestSetup {
   }
 
 }
-
-

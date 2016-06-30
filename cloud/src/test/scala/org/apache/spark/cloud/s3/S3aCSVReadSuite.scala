@@ -31,13 +31,6 @@ import org.apache.spark.mllib.stat.{MultivariateStatisticalSummary, Statistics}
  */
 private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
 
-  val CSV_TESTFILE: Option[Path] = {
-    val pathname = conf.get(S3A_CSVFILE_PATH, S3A_CSV_PATH_DEFAULT)
-    if (!pathname.isEmpty) Some(new Path(pathname)) else None
-  }
-
-  def hasCSVTestFile = CSV_TESTFILE.isDefined
-
   /**
    * Minimum number of lines, from `gunzip` + `wc -l` on day of first teste.
    * This grows over time.
@@ -55,11 +48,15 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
     }
   }
 
+  after {
+    cleanFilesystemInTeardown()
+  }
+
   ctest("CSVgz",
     "Read compressed CSV",
     "Read compressed CSV files through the spark context") {
     val source = CSV_TESTFILE.get
-    sc = new SparkContext("local", "test", newSparkConf(source))
+    sc = new SparkContext("local", "CSVgz", newSparkConf(source))
     val sceneInfo = getFilesystem(source).getFileStatus(source)
     logInfo(s"Compressed size = ${sceneInfo.getLen}")
     validateCSV(sc, source)
@@ -92,7 +89,6 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
       | This verifies that the URIs are directing to the correct FS""".stripMargin) {
     sc = new SparkContext("local", "test", newSparkConf())
     val source = CSV_TESTFILE.get
-    val input = sc.textFile(source.toString)
     validateCSV(sc, source)
     logInfo(s"Filesystem statistics ${getFilesystem(source)}")
   }
@@ -144,7 +140,7 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
       assert(-1 !== in.read())
     }
 
-    def readFully(offset: Long, len: Int) = {
+    def readFully(offset: Long, len: Int): Unit = {
       time(s"readFully($offset, byte[$len])") {
         val bytes = new Array[Byte](len)
         assert(-1 !== in.readFully(offset, bytes))
@@ -247,5 +243,3 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
     b.toString()
   }
 }
-
-
