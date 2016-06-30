@@ -189,7 +189,7 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
    * @return the newly create FS.
    */
   protected def createFilesystem(fsURI: URI): FileSystem = {
-    val fs = FileSystem.get(fsURI, conf)
+    val fs = FileSystem.newInstance(fsURI, conf)
     setFilesystem(fs)
     fs
   }
@@ -339,7 +339,7 @@ private[cloud] abstract class CloudSuite extends SparkFunSuite with CloudTestKey
    * @return a (cached) filesystem.
    */
   def getFilesystem(path: Path): FileSystem = {
-    FileSystem.get(path.toUri, conf)
+    FileSystem.newInstance(path.toUri, conf)
   }
 
 }

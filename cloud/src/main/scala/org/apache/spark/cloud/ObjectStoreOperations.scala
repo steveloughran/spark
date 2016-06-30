@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{CommonConfigurationKeysPublic, FileSystem, Path, PathFilter}
 import org.apache.hadoop.io.{NullWritable, Text}
 
-import org.apache.spark.Logging
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 
 /**
@@ -62,7 +62,7 @@ private[cloud] trait ObjectStoreOperations extends Logging {
   }
 
   /**
-   * Take a predicate, generate a path filter from it
+   * Take a predicate, generate a path filter from it.
    * @param filterPredicate predicate
    * @return a filter which uses the predicate to decide whether to accept a file or not
    */

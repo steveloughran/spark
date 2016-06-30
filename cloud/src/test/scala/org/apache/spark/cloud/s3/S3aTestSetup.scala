@@ -19,6 +19,7 @@ package org.apache.spark.cloud.s3
 
 import java.net.URI
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.fs.s3a.Constants
 
@@ -28,18 +29,30 @@ import org.apache.spark.cloud.CloudSuite
  * Trait for S3A tests
  */
 private[cloud] trait S3aTestSetup extends CloudSuite {
+import org.apache.spark.cloud.s3.S3AConstants._
 
   def initFS(): FileSystem = {
-    val id = requiredOption(AWS_ACCOUNT_ID)
-    val secret = requiredOption(AWS_ACCOUNT_SECRET)
-    conf.set("fs.s3n.awsAccessKeyId", id)
-    conf.set("fs.s3n.awsSecretAccessKey", secret)
-    conf.set(Constants.BUFFER_DIR, localTmpDir.getAbsolutePath)
-    // a block size of 1MB
-    conf.set(S3AConstants.FS_S3A_BLOCK_SIZE, (1024 * 1024).toString)
+    setupFilesystemConfiguration(conf)
+
     val s3aURI = new URI(requiredOption(S3A_TEST_URI))
-    logDebug(s"Executing S3 tests against $s3aURI")
+    logDebug(s"Executing S3 tests against $s3aURI with read policy $inputPolicy")
     createFilesystem(s3aURI)
+  }
+
+  /**
+   * Overrride point: set up the configuration for the filesystem.
+   * The base implementation sets up buffer directory, block size and IO Policy.
+   * @param config configuration to set up
+   */
+  def setupFilesystemConfiguration(config: Configuration): Unit = {
+    config.set(Constants.BUFFER_DIR, localTmpDir.getAbsolutePath)
+    // a block size of 1MB
+    config.set(FS_S3A_BLOCK_SIZE, (1024 * 1024).toString)
+    // the input policy
+    config.set(INPUT_FADVISE, inputPolicy)
+    if (useCSVEndpoint) {
+      enableCSVEndpoint(config)
+    }
   }
 
   val CSV_TESTFILE: Option[Path] = {
@@ -47,6 +60,43 @@ private[cloud] trait S3aTestSetup extends CloudSuite {
     if (!pathname.isEmpty) Some(new Path(pathname)) else None
   }
 
+  /**
+   * Set up a configuration so that creatd filesystems will use the endpoint for the CSV file
+   * @param config configuration to patch.
+   */
+  def enableCSVEndpoint(config: Configuration): Unit = {
+    config.set(ENDPOINT,
+      config.get(S3A_CSVFILE_ENDPOINT, S3A_CSVFILE_ENDPOINT_DEFAULT))
+  }
+
+  /**
+   * Predicate to define whether or not there's a CSV file to work with.
+   * @return true if the CSV test file is defined.
+   */
   protected def hasCSVTestFile = CSV_TESTFILE.isDefined
 
+  /**
+   * What input policy to request (Hadoop 2.8+)
+   * @return the IO type
+   */
+  protected def inputPolicy = SEQUENTIAL_IO
+
+  /**
+   * Should the endpoint for the CSV data be used in the configuration
+   * @return false
+   */
+  protected def useCSVEndpoint = false
+
+  /**
+   * Predicate which declares that the test and CSV endpoints are different.
+   * Tests which want to read the CSV file and then write to their own FS are not
+   * going to work —the spark context only has a single endpoint option.
+   * @param config configuration to probe
+   * @return true if the endpoints are different
+   */
+  protected def testAndCSVEndpointsDifferent(config: Configuration): Boolean = {
+    val generalEndpoint = config.get(ENDPOINT, S3A_CSVFILE_ENDPOINT_DEFAULT)
+    val testEndpoint = config.get(S3A_CSVFILE_ENDPOINT, S3A_CSVFILE_ENDPOINT_DEFAULT)
+    generalEndpoint != testEndpoint
+  }
 }

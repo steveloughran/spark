@@ -18,7 +18,8 @@
 package org.apache.spark.cloud.s3
 
 /**
- * S3A constants. Different Hadoop versions have an incomplete set of these;
+ * S3A constants. Different Hadoop versions have an incomplete set of these; keeping them
+ * in source here ensures that there are no compile/link problems
  */
 object S3AConstants {
   val ACCESS_KEY = "fs.s3a.access.key"
@@ -59,4 +60,8 @@ object S3AConstants {
   val FS_S3A = "s3a"
   val USER_AGENT_PREFIX = "fs.s3a.user.agent.prefix"
   val READAHEAD_RANGE = "fs.s3a.readahead.range"
+  val INPUT_FADVISE = "fs.s3a.experimental.input.fadvise";
+  val SEQUENTIAL_IO = "sequential"
+  val NORMAL_IO = "normal"
+  val RANDOM_IO = "random"
 }

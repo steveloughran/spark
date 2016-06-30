@@ -110,7 +110,7 @@ private[spark] trait CloudTestKeys {
   val S3A_TEST_URI = "s3a.test.uri"
 
   /**
-   * Key referring to the csvfile. If unset, use `DEFAULT_S3A_CSV_PATH`. If empty, tests
+   * Key referring to the csvfile. If unset, uses `S3A_CSV_PATH_DEFAULT`. If empty, tests
    * depending upon the CSV file will be skipped.
    */
   val S3A_CSVFILE_PATH = "s3a.test.csvfile.path"
@@ -119,6 +119,20 @@ private[spark] trait CloudTestKeys {
    * Default source of a public multi-MB CSV file.
    */
   val S3A_CSV_PATH_DEFAULT = "s3a://landsat-pds/scene_list.gz"
+
+  /**
+   * Defines the endpoint for the CSV test file. If not set, or set to "", the
+   * test endpoint remains that used by the rest of the system. This property
+   * is needed to allow a public test dataset to be read off a different S3 endpoint than the
+   * one used for the private read/write tests.
+   */
+  val S3A_CSVFILE_ENDPOINT = "s3a.test.csvfile.endpoint"
+
+  /**
+   * The default value: "s3.amazonaws.com". Amazon's US-east S3 endpoint, which will
+   * actually handle V2 API requests against any S3 instance.
+   */
+  val S3A_CSVFILE_ENDPOINT_DEFAULT = "s3.amazonaws.com"
 
   /**
    * Key defining the Are AWS tests enabled? If set, the user

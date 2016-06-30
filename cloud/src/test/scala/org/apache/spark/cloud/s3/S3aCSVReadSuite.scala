@@ -19,7 +19,7 @@ package org.apache.spark.cloud.s3
 
 import scala.collection.mutable
 
-import org.apache.hadoop.fs.{FSDataInputStream, FileSystem, Path}
+import org.apache.hadoop.fs.{FSDataInputStream, Path}
 
 import org.apache.spark.SparkContext
 import org.apache.spark.cloud.CloudSuite
@@ -39,28 +39,25 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
 
   override def enabled: Boolean = super.enabled && hasCSVTestFile
 
+  override def useCSVEndpoint: Boolean = true
+
   init()
 
   def init(): Unit = {
-    // propagate S3 credentials
-    if (enabled) {
-      initFS()
-    }
+    setupFilesystemConfiguration(conf)
   }
 
-  after {
-    cleanFilesystemInTeardown()
-  }
 
   ctest("CSVgz",
     "Read compressed CSV",
     "Read compressed CSV files through the spark context") {
     val source = CSV_TESTFILE.get
     sc = new SparkContext("local", "CSVgz", newSparkConf(source))
-    val sceneInfo = getFilesystem(source).getFileStatus(source)
+    val fs = getFilesystem(source)
+    val sceneInfo = fs.getFileStatus(source)
     logInfo(s"Compressed size = ${sceneInfo.getLen}")
     validateCSV(sc, source)
-    logInfo(s"Filesystem statistics ${getFilesystem(source)}")
+    logInfo(s"Filesystem statistics ${fs}")
   }
 
   /**
@@ -93,91 +90,19 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
     logInfo(s"Filesystem statistics ${getFilesystem(source)}")
   }
 
-  ctest("SeekReadFully",
-    "Cost of seek and ReadFully",
-    """Assess cost of seek and read operations.
-      | When moving the cursor in an input stream, an HTTP connection may be closed and
-      | then re-opened. This can be very expensive; tactics like streaming forwards instead
-      | of seeking, and/or postponing movement until the following read ('lazy seek') try
-      | to address this. Logging these operation times helps track performance.
-      | This test also tries to catch out a regression, where a `close()` operation
-      | is implemented through reading through the entire input stream. This is exhibited
-      | in the time to `close()` while at offset 0 being `O(len(file))`.
-      |
-      | Note also the cost of `readFully()`; this method call is common inside libraries
-      | like Orc and Parquet.""".stripMargin) {
-    val source = CSV_TESTFILE.get
-    val fs = getFilesystem(source)
-    FileSystem.clearStatistics
-    val stats = FileSystem.getStatistics("s3a", fs.getClass)
-    stats.reset()
-    val st = duration("stat") {
-      fs.getFileStatus(source)
-    }
-    val in = duration("open") {
-      fs.open(source)
-    }
-    def time[T](operation: String)(testFun: => T): T = {
-      logInfo(s"")
-      var r = duration(operation + s" [pos = ${in.getPos}]")(testFun)
-      logInfo(s"  ${in.getWrappedStream}")
-      r
-    }
-
-    time("read()") {
-      assert(-1 !== in.read())
-    }
-    time("seek(256)") {
-      in.seek(256)
-    }
-    time("seek(256)") {
-      in.seek(256)
-    }
-    time("seek(EOF-2)") {
-      in.seek(st.getLen - 2)
-    }
-    time("read()") {
-      assert(-1 !== in.read())
-    }
-
-    def readFully(offset: Long, len: Int): Unit = {
-      time(s"readFully($offset, byte[$len])") {
-        val bytes = new Array[Byte](len)
-        assert(-1 !== in.readFully(offset, bytes))
-      }
-    }
-    readFully(1L, 1)
-    readFully(1L, 256)
-    readFully(260L, 256)
-    readFully(1024L, 256)
-    readFully(1536L, 256)
-    readFully(8192L, 1024)
-    readFully(8192L + 1024 + 512, 1024)
-
-    time("seek(getPos)") {
-      in.seek(in.getPos())
-    }
-    time("read()") {
-      assert(-1 !== in.read())
-    }
-    duration("close()") {
-      in.close
-    }
-    logInfo(s"Statistics $stats")
-  }
-
   ctest("ReadBytesReturned",
     "Read Bytes",
     """Read in blocks and assess their size and duration.
       | This is to identify buffering quirks.
     """.stripMargin) {
     val source = CSV_TESTFILE.get
+    val fs = getFilesystem(source)
     val blockSize = 8192
     val buffer = new Array[Byte](blockSize)
     val returnSizes: mutable.Map[Int, (Int, Long)] = mutable.Map()
-    val stat = getFilesystem(source).getFileStatus(source)
+    val stat = fs.getFileStatus(source)
     val blocks = (stat.getLen / blockSize).toInt
-    val instream: FSDataInputStream = getFilesystem(source).open(source)
+    val instream: FSDataInputStream = fs.open(source)
     var readOperations = 0
     var totalReadTime = 0L
     val results = new mutable.MutableList[ReadSample]()
@@ -232,7 +157,7 @@ private[cloud] class S3aCSVReadSuite extends CloudSuite with S3aTestSetup {
     logInfo(s"Bytes Read ${summary(stats, 4)}")
     logInfo(s"Difference between requested and actual ${summary(stats, 7)}")
     logInfo(s"Per byte read time/nS ${summary(stats, 6)}")
-    logInfo(s"Filesystem statistics ${getFilesystem(source)}")
+    logInfo(s"Filesystem statistics ${fs}")
   }
 
   def summary(stats: MultivariateStatisticalSummary, col: Int): String = {

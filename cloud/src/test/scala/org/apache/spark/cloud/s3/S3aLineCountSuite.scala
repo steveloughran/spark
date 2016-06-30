@@ -29,49 +29,18 @@ private[cloud] class S3aLineCountSuite extends CloudSuite with S3aTestSetup {
 
   init()
 
+  override def useCSVEndpoint: Boolean = true
+
   def init(): Unit = {
-    // propagate S3 credentials
-    if (enabled) {
-      initFS()
-    }
+    setupFilesystemConfiguration(conf)
   }
 
   override def enabled: Boolean = super.enabled && hasCSVTestFile
 
-  after {
-    cleanFilesystemInTeardown()
-  }
-
-  ctest("S3ALineCountWriteback",
-    "S3A Line count with the results written back",
-    "Execute the S3ALineCount example with the results written back to" +
-        " the test filesystem. This test can take minutes.") {
-    val sourceFile = CSV_TESTFILE.get
-    val sourceFS = FileSystem.get(sourceFile.toUri, conf)
-    val sourceInfo = sourceFS.getFileStatus(sourceFile)
-    val sparkConf = newSparkConf()
-    sparkConf.setAppName("S3LineCount")
-    val destDir = filesystem.makeQualified(new Path(TestDir, "s3alinecount"))
-    assert(0 === S3LineCount.action(sparkConf,
-      Array(sourceFile.toString, destDir.toString)))
-    val status = filesystem.getFileStatus(destDir)
-    assert(status.isDirectory, s"Not a directory: $status")
-    val files = filesystem.listStatus(destDir,
-      pathFilter(p => p.getName != "_SUCCESS"))
-    var size = 0L
-    var filenames = ""
-    files.foreach { f =>
-      size += f.getLen
-      filenames = filenames + " " + f.getPath.getName
-    }
-    logInfo(s"total size = $size bytes from ${files.length} files: $filenames")
-    assert (size >= sourceInfo.getLen, s"output data $size smaller than source $sourceFile")
-  }
-
-  ctest("S3ALineCountDefaults",
+  ctest("S3ALineCountReadData",
     "S3A Line count default values",
     "Execute the S3ALineCount example with the default values (i.e. no arguments)") {
-    val sparkConf = newSparkConf()
+    val sparkConf = newSparkConf(CSV_TESTFILE.get)
     sparkConf.setAppName("S3ALineCountDefaults")
     assert(0 === S3LineCount.action(sparkConf, Array()))
   }

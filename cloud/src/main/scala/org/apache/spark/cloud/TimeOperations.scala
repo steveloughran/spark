@@ -19,12 +19,12 @@ package org.apache.spark.cloud
 
 import java.util.Locale
 
-import org.apache.spark.Logging
+import org.apache.spark.internal.Logging
 
 /**
  * Trait to add timing to operations.
  */
-private[cloud]trait TimeOperations extends Logging {
+private[cloud] trait TimeOperations extends Logging {
 
   /**
    * Convert a time in nanoseconds into a human-readable form for logging.

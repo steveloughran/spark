@@ -15,24 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.spark.cloud.azure
-
-import java.net.URI
-
-import org.apache.hadoop.fs.FileSystem
-
-import org.apache.spark.cloud.CloudSuite
+package org.apache.spark.cloud.s3
 
 /**
- * Trait for S3A tests
+ * Subclass of `S3aSeekReadSuite` with random IO turned on.
  */
-private[cloud] trait AzureTestSetup extends CloudSuite {
+class S3aRandomSeekReadSuite extends S3aSeekReadSuite {
 
-  override def enabled: Boolean = super.enabled && conf.getBoolean(AZURE_TESTS_ENABLED, false)
-
-  def initFS(): FileSystem = {
-    val uri = new URI(requiredOption(AZURE_TEST_URI))
-    logDebug(s"Executing Azure tests against $uri")
-    createFilesystem(uri)
-  }
+  override def inputPolicy = S3AConstants.RANDOM_IO
 }

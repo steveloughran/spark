@@ -77,14 +77,13 @@ object S3LineCount extends S3ExampleBase {
 
     // If there is no destination, switch to the anonymous provider.
     if (dest.isEmpty) {
-      hconf(sparkConf, AWS_CREDENTIALS_PROVIDER,
-        ANONYMOUS_CREDENTIALS)
+      hconf(sparkConf, AWS_CREDENTIALS_PROVIDER, ANONYMOUS_CREDENTIALS)
     }
     logInfo(s"Data Source $srcURI")
 
     val sc = new SparkContext(sparkConf)
     try {
-      val sourceFs = FileSystem.get(srcURI, sc.hadoopConfiguration)
+      val sourceFs = FileSystem.newInstance(srcURI, sc.hadoopConfiguration)
 
       // this will throw an exception if the source file is missing
       val status = sourceFs.getFileStatus(srcPath)
