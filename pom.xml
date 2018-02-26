@@ -2672,6 +2672,14 @@
     </profile>
 
     <profile>
+      <id>hadoop-3</id>
+      <properties>
+        <hadoop.version>3.0.1</hadoop.version>
+        <curator.version>2.12.0</curator.version>
+      </properties>
+    </profile>
+
+    <profile>
       <id>yarn</id>
       <modules>
         <module>resource-managers/yarn</module>
