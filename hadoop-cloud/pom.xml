@@ -39,115 +39,131 @@
   </properties>
 
   <dependencies>
-    <!--
-      the AWS module pulls in jackson; its transitive dependencies can create
-      intra-jackson-module version problems.
-      -->
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-aws</artifactId>
-      <version>${hadoop.version}</version>
-      <scope>${hadoop.deps.scope}</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-common</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>commons-logging</groupId>
-          <artifactId>commons-logging</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.codehaus.jackson</groupId>
-          <artifactId>jackson-mapper-asl</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.codehaus.jackson</groupId>
-          <artifactId>jackson-core-asl</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>com.fasterxml.jackson.core</groupId>
-          <artifactId>jackson-core</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>com.fasterxml.jackson.core</groupId>
-          <artifactId>jackson-databind</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>com.fasterxml.jackson.core</groupId>
-          <artifactId>jackson-annotations</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-openstack</artifactId>
-      <version>${hadoop.version}</version>
-      <scope>${hadoop.deps.scope}</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-common</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>commons-logging</groupId>
-          <artifactId>commons-logging</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>junit</groupId>
-          <artifactId>junit</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.mockito</groupId>
-          <artifactId>mockito-all</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-
-    <!--
-    Add joda time to ensure that anything downstream which doesn't pull in spark-hive
-    gets the correct joda time artifact, so doesn't have auth failures on later Java 8 JVMs
-    -->
-    <dependency>
-      <groupId>joda-time</groupId>
-      <artifactId>joda-time</artifactId>
-      <scope>${hadoop.deps.scope}</scope>
-    </dependency>
-    <!-- explicitly declare the jackson artifacts desired -->
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <scope>${hadoop.deps.scope}</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-annotations</artifactId>
-      <scope>${hadoop.deps.scope}</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.dataformat</groupId>
-      <artifactId>jackson-dataformat-cbor</artifactId>
-      <version>${fasterxml.jackson.version}</version>
-    </dependency>
-    <!--Explicit declaration to force in Spark version into transitive dependencies -->
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpclient</artifactId>
-      <scope>${hadoop.deps.scope}</scope>
-    </dependency>
-    <!--Explicit declaration to force in Spark version into transitive dependencies -->
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
-      <scope>${hadoop.deps.scope}</scope>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-sql_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
     </dependency>
   </dependencies>
 
   <profiles>
 
+    <!-- this inner profile is the default one and includes openstack and aws-->
+    <profile>
+      <id>profile.hadoop-2.6</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <dependencies>
+        <!--
+          the AWS module pulls in jackson; its transitive dependencies can create
+          intra-jackson-module version problems.
+          -->
+        <dependency>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-aws</artifactId>
+          <version>${hadoop.version}</version>
+          <scope>${hadoop.deps.scope}</scope>
+          <exclusions>
+            <exclusion>
+              <groupId>org.apache.hadoop</groupId>
+              <artifactId>hadoop-common</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>commons-logging</groupId>
+              <artifactId>commons-logging</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>org.codehaus.jackson</groupId>
+              <artifactId>jackson-mapper-asl</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>org.codehaus.jackson</groupId>
+              <artifactId>jackson-core-asl</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.fasterxml.jackson.core</groupId>
+              <artifactId>jackson-core</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.fasterxml.jackson.core</groupId>
+              <artifactId>jackson-databind</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.fasterxml.jackson.core</groupId>
+              <artifactId>jackson-annotations</artifactId>
+            </exclusion>
+          </exclusions>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-openstack</artifactId>
+          <version>${hadoop.version}</version>
+          <scope>${hadoop.deps.scope}</scope>
+          <exclusions>
+            <exclusion>
+              <groupId>org.apache.hadoop</groupId>
+              <artifactId>hadoop-common</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>commons-logging</groupId>
+              <artifactId>commons-logging</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>junit</groupId>
+              <artifactId>junit</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>org.mockito</groupId>
+              <artifactId>mockito-all</artifactId>
+            </exclusion>
+          </exclusions>
+        </dependency>
+
+        <!--
+        Add joda time to ensure that anything downstream which doesn't pull in spark-hive
+        gets the correct joda time artifact, so doesn't have auth failures on later Java 8 JVMs
+        -->
+        <dependency>
+          <groupId>joda-time</groupId>
+          <artifactId>joda-time</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+        <!-- explicitly declare the jackson artifacts desired -->
+        <dependency>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-databind</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+        <dependency>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-annotations</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+        <dependency>
+          <groupId>com.fasterxml.jackson.dataformat</groupId>
+          <artifactId>jackson-dataformat-cbor</artifactId>
+          <version>${fasterxml.jackson.version}</version>
+        </dependency>
+        <!--Explicit declaration to force in Spark version into transitive dependencies -->
+        <dependency>
+          <groupId>org.apache.httpcomponents</groupId>
+          <artifactId>httpclient</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+        <!--Explicit declaration to force in Spark version into transitive dependencies -->
+        <dependency>
+          <groupId>org.apache.httpcomponents</groupId>
+          <artifactId>httpcore</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+
     <profile>
       <id>hadoop-2.7</id>
-      <!-- Hadoop Azure is a new Jar with -->
+      <!-- 2.7+ adds the azure Jar to the set of dependencies -->
       <dependencies>
 
         <!--
@@ -176,6 +192,108 @@
               <artifactId>guava</artifactId>
             </exclusion>
           </exclusions>
+        </dependency>
+        <!--
+          the AWS module pulls in jackson; its transitive dependencies can create
+          intra-jackson-module version problems.
+          -->
+        <dependency>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-aws</artifactId>
+          <version>${hadoop.version}</version>
+          <scope>${hadoop.deps.scope}</scope>
+          <exclusions>
+            <exclusion>
+              <groupId>org.apache.hadoop</groupId>
+              <artifactId>hadoop-common</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>commons-logging</groupId>
+              <artifactId>commons-logging</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>org.codehaus.jackson</groupId>
+              <artifactId>jackson-mapper-asl</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>org.codehaus.jackson</groupId>
+              <artifactId>jackson-core-asl</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.fasterxml.jackson.core</groupId>
+              <artifactId>jackson-core</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.fasterxml.jackson.core</groupId>
+              <artifactId>jackson-databind</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>com.fasterxml.jackson.core</groupId>
+              <artifactId>jackson-annotations</artifactId>
+            </exclusion>
+          </exclusions>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-openstack</artifactId>
+          <version>${hadoop.version}</version>
+          <scope>${hadoop.deps.scope}</scope>
+          <exclusions>
+            <exclusion>
+              <groupId>org.apache.hadoop</groupId>
+              <artifactId>hadoop-common</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>commons-logging</groupId>
+              <artifactId>commons-logging</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>junit</groupId>
+              <artifactId>junit</artifactId>
+            </exclusion>
+            <exclusion>
+              <groupId>org.mockito</groupId>
+              <artifactId>mockito-all</artifactId>
+            </exclusion>
+          </exclusions>
+        </dependency>
+
+        <!--
+        Add joda time to ensure that anything downstream which doesn't pull in spark-hive
+        gets the correct joda time artifact, so doesn't have auth failures on later Java 8 JVMs
+        -->
+        <dependency>
+          <groupId>joda-time</groupId>
+          <artifactId>joda-time</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+        <!-- explicitly declare the jackson artifacts desired -->
+        <dependency>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-databind</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+        <dependency>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-annotations</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+        <dependency>
+          <groupId>com.fasterxml.jackson.dataformat</groupId>
+          <artifactId>jackson-dataformat-cbor</artifactId>
+          <version>${fasterxml.jackson.version}</version>
+        </dependency>
+        <!--Explicit declaration to force in Spark version into transitive dependencies -->
+        <dependency>
+          <groupId>org.apache.httpcomponents</groupId>
+          <artifactId>httpclient</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+        <!--Explicit declaration to force in Spark version into transitive dependencies -->
+        <dependency>
+          <groupId>org.apache.httpcomponents</groupId>
+          <artifactId>httpcore</artifactId>
+          <scope>${hadoop.deps.scope}</scope>
         </dependency>
       </dependencies>
     </profile>
@@ -185,15 +303,16 @@
      enables cloud-specific committers.
     -->
     <profile>
-      <id>hadoop-3</id>
+      <id>hadoop-3.1</id>
       <dependencies>
 
         <!--
-        Hadoop WASB client only arrived in Hadoop 2.7
+        There's now a hadoop-cloud-storage which transitively pulls in the store JARs,
+        but it still needs some selective exclusion across versions, especially 3.0.
         -->
         <dependency>
           <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-azure</artifactId>
+          <artifactId>hadoop-cloud-storage</artifactId>
           <version>${hadoop.version}</version>
           <scope>${hadoop.deps.scope}</scope>
           <exclusions>
@@ -215,20 +334,14 @@
             </exclusion>
           </exclusions>
         </dependency>
-        <!-- Azure datalake only adds a dependency com.microsoft.azure:azure-data-lake-store-sdk -->
+
         <dependency>
           <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-azure-datalake</artifactId>
+          <artifactId>hadoop-client</artifactId>
           <version>${hadoop.version}</version>
-          <scope>${hadoop.deps.scope}</scope>
-          <exclusions>
-            <exclusion>
-              <groupId>org.apache.hadoop</groupId>
-              <artifactId>hadoop-common</artifactId>
-            </exclusion>
-          </exclusions>
         </dependency>
       </dependencies>
+
     </profile>
 
   </profiles>
