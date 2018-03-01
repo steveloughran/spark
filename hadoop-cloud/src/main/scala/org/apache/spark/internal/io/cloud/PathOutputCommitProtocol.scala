@@ -20,11 +20,11 @@ package org.apache.spark.internal.io.cloud
 import java.io.IOException
 
 import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapreduce.lib.output.{FileOutputCommitter, PathOutputCommitter, PathOutputCommitterFactory}
 import org.apache.hadoop.mapreduce.{JobContext, OutputCommitter, TaskAttemptContext}
+import org.apache.hadoop.mapreduce.lib.output.{FileOutputCommitter, PathOutputCommitter, PathOutputCommitterFactory}
 
-import org.apache.spark.internal.io.FileCommitProtocol.TaskCommitMessage
 import org.apache.spark.internal.io.{FileCommitProtocol, HadoopMapReduceCommitProtocol}
+import org.apache.spark.internal.io.FileCommitProtocol.TaskCommitMessage
 
 /**
  * Spark Commit protocol for Path Output Committers.
@@ -59,11 +59,8 @@ class PathOutputCommitProtocol(jobId: String, destination: String)
     logInfo(s"Setting up committer for path $destination")
     committer = PathOutputCommitterFactory.createCommitter(destPath, context)
 
-
-    /**
-     * Special feature to force out the FileOutputCommitter, so as to make sure
-     * that
-     */
+    // Special feature to force out the FileOutputCommitter, so as to guarantee
+    // that the binding is working properly.
     val rejectFileOutput = context.getConfiguration
       .getBoolean(REJECT_FILE_OUTPUT, REJECT_FILE_OUTPUT_DEFVAL)
     if (rejectFileOutput && committer.isInstanceOf[FileOutputCommitter]) {
@@ -89,19 +86,6 @@ class PathOutputCommitProtocol(jobId: String, destination: String)
       }
     }
     committer
-  }
-
-  /**
-   * Build the committer factory name.
-   * If "" then the factory is considered undefined.
-   * Base implementation: get the value in the configuration itself.
-   *
-   * @param context task context
-   * @return the name of the factory.
-   */
-  protected def buildCommitterFactoryName(
-    context: TaskAttemptContext): String = {
-    context.getConfiguration.getTrimmed(OUTPUTCOMMITTER_FACTORY_CLASS, "")
   }
 
   /**
@@ -220,16 +204,14 @@ class PathOutputCommitProtocol(jobId: String, destination: String)
 object PathOutputCommitProtocol {
 
   /**
-   * The option used to declare the general factory class (schema independent)
-   */
-  val OUTPUTCOMMITTER_FACTORY_CLASS = "mapreduce.pathoutputcommitter.factory.class"
-
-  /**
    * Fail fast if the committer is using the path output protocol.
    * This option can be used to catch configuration issues early.
    */
   val REJECT_FILE_OUTPUT = "pathoutputcommit.reject.fileoutput"
 
+  /**
+   * Default behavior: accept the file output.
+   */
   val REJECT_FILE_OUTPUT_DEFVAL = false
 }
 

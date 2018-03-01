@@ -36,7 +36,7 @@ object CommitterConstants {
   /**
    * Name of the configuration option used to configure the
    * output committer factory to use unless there is a specific
-   * one for a schema
+   * one for a schema.
    */
   val OUTPUTCOMMITTER_FACTORY_CLASS = "mapreduce.pathoutputcommitter.factory.class"
 
