@@ -18,11 +18,12 @@
 package org.apache.spark.internal.io.cloud
 
 import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapreduce.{JobContext, JobStatus, TaskAttemptContext}
 import org.apache.hadoop.mapreduce.lib.output.{BindingPathOutputCommitter, PathOutputCommitter}
+import org.apache.hadoop.mapreduce.{JobContext, JobStatus, TaskAttemptContext}
 import org.apache.parquet.hadoop.ParquetOutputCommitter
 
 import org.apache.spark.internal.Logging
+
 
 /**
  * This dynamically binds to the factory-configured
@@ -40,7 +41,7 @@ class BindingParquetOutputCommitter(
   val committer = new BindingPathOutputCommitter(path, context)
 
   /**
-   * This is the committer ultimately bound to
+   * This is the committer ultimately bound to.
    * @return the committer instantiated by the factory.
    */
   def boundCommitter(): PathOutputCommitter = {

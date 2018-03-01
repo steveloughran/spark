@@ -22,6 +22,7 @@ package org.apache.spark.internal.io.cloud
  */
 object CommitterConstants {
 
+
   /**
    * Scheme prefix for per-filesystem scheme committers.
    */
@@ -45,13 +46,13 @@ object CommitterConstants {
 
   /**
    * The committer which can be directly instantiated and which then delegates
-   * all operations to the factory-created committer it craetes itself.
+   * all operations to the factory-created committer it creates itself.
    */
   val BINDING_PATH_OUTPUT_COMMITTER_CLASS =
     "org.apache.hadoop.mapreduce.lib.output.BindingPathOutputCommitter"
 
   val BINDING_PARQUET_OUTPUT_COMMITTER_CLASS =
-    "com.hortonworks.spark.cloud.commit.BindingParquetOutputCommitter"
+    "org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter"
 
   val SUCCESSFUL_JOB_OUTPUT_DIR_MARKER = "mapreduce.fileoutputcommitter.marksuccessfuljobs"
   val FILEOUTPUTCOMMITTER_ALGORITHM_VERSION = "mapreduce.fileoutputcommitter.algorithm.version"
