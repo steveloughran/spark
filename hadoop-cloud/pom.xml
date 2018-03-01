@@ -47,6 +47,43 @@
     </dependency>
   </dependencies>
 
+  <build>
+    <plugins>
+      <!-- Include a source dir depending on the Scala version -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>add-scala-sources</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${extra.source.dir}</source>
+              </sources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>add-scala-test-sources</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>add-test-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${extra.testsource.dir}</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+
+  </build>
+
   <profiles>
 
     <!-- this inner profile is the default one and includes openstack and aws-->
@@ -304,6 +341,10 @@
     -->
     <profile>
       <id>hadoop-3.1</id>
+      <properties>
+        <extra.source.dir>src/hadoop-3/main/scala</extra.source.dir>
+        <extra.testsource.dir>src/hadoop-3/test/scala</extra.testsource.dir>
+      </properties>
       <dependencies>
 
         <!--
