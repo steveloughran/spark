@@ -20,7 +20,7 @@ package org.apache.spark.internal.io.cloud
 /**
  * Constants general to all the committers.
  */
-object CommitterConstants {
+object PathCommitterConstants {
 
 
   /**
@@ -70,4 +70,8 @@ object CommitterConstants {
    */
   val SUCCESS_FILE_NAME = "_SUCCESS"
 
+  /**
+   * Flag to trigger creation of a marker file on job completion.
+   */
+  val CREATE_SUCCESSFUL_JOB_OUTPUT_DIR_MARKER = "mapreduce.fileoutputcommitter.marksuccessfuljobs"
 }
