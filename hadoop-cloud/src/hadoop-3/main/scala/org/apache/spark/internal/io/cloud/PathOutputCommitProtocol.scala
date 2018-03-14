@@ -19,7 +19,7 @@ package org.apache.spark.internal.io.cloud
 
 import java.io.IOException
 
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{Path, PathIOException}
 import org.apache.hadoop.mapreduce.{JobContext, OutputCommitter, TaskAttemptContext}
 import org.apache.hadoop.mapreduce.lib.output.{FileOutputCommitter, PathOutputCommitter, PathOutputCommitterFactory}
 
@@ -40,17 +40,39 @@ import org.apache.spark.internal.io.FileCommitProtocol.TaskCommitMessage
  * as some subclasses do not do this, overrides those subclasses to using the
  * factory mechanism now supported in the base class.
  *
- * @param jobId       job
- * @param destination destination
- */
-class PathOutputCommitProtocol(jobId: String, destination: String)
-  extends HadoopMapReduceCommitProtocol(jobId, destination) with Serializable {
+ * @param jobId                     job
+ * @param destination               destination
+ * @param dynamicPartitionOverwrite If true, Spark will overwrite partition directories at runtime
+ *                                  dynamically, i.e., we first write files under a staging
+ *                                  directory with partition path, e.g.
+ *                                  /path/to/staging/a=1/b=1/xxx.parquet. When committing the job,
+ *                                  we first clean up the corresponding partition directories at
+ *                                  destination path, e.g. /path/to/destination/a=1/b=1, and move
+ *                                  files from staging directory to the corresponding partition
+ *                                  directories under destination path.*/
+class PathOutputCommitProtocol(
+  jobId: String,
+  destination: String,
+  dynamicPartitionOverwrite: Boolean = false)
+  extends HadoopMapReduceCommitProtocol(
+    jobId,
+    destination,
+    false) with Serializable {
 
   @transient var committer: PathOutputCommitter = _
 
   val destPath = new Path(destination)
 
-  logInfo(s"Instantiate committer for job $jobId with path $destination")
+  logInfo(s"Instantiated committer with job ID=$jobId;" +
+    s" destination=$destPath;" +
+    s" dynamicPartitionOverwrite=$dynamicPartitionOverwrite")
+
+  if (dynamicPartitionOverwrite) {
+    // until there's explicit extensions to the PathOutputCommitProtocols
+    // to support the spark mechanism, it's left to the individual committer
+    // choice to handle partitioning.
+    throw new IOException("PathOutputCommitProtocol does not support dynamicPartitionOverwrite")
+  }
 
   import PathOutputCommitProtocol._
 
@@ -100,11 +122,10 @@ class PathOutputCommitProtocol(jobId: String, destination: String)
     taskContext: TaskAttemptContext,
     dir: Option[String],
     ext: String): String = {
-    val stagingDir = committer.getWorkPath
-    val parent = dir.map(d => new Path(stagingDir, d))
-      .getOrElse(stagingDir)
+    val workDir = committer.getWorkPath
+    val parent = dir.map(d => new Path(workDir, d)).getOrElse(workDir)
     val file = new Path(parent, buildFilename(taskContext, ext))
-    logDebug(s"Temporary file for dir $dir with ext $ext is $file")
+    logInfo(s"Creating task file $file for dir $dir and ext $ext")
     file.toString
   }
 
