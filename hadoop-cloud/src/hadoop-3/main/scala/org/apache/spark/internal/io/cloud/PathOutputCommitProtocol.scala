@@ -42,14 +42,10 @@ import org.apache.spark.internal.io.FileCommitProtocol.TaskCommitMessage
  *
  * @param jobId                     job
  * @param destination               destination
- * @param dynamicPartitionOverwrite If true, Spark will overwrite partition directories at runtime
- *                                  dynamically, i.e., we first write files under a staging
- *                                  directory with partition path, e.g.
- *                                  /path/to/staging/a=1/b=1/xxx.parquet. When committing the job,
- *                                  we first clean up the corresponding partition directories at
- *                                  destination path, e.g. /path/to/destination/a=1/b=1, and move
- *                                  files from staging directory to the corresponding partition
- *                                  directories under destination path.*/
+ * @param dynamicPartitionOverwrite does the caller want support for dynamic
+ *                                  partition overwrite. If so, it will be
+ *                                  refused.
+ */
 class PathOutputCommitProtocol(
   jobId: String,
   destination: String,
@@ -89,7 +85,8 @@ class PathOutputCommitProtocol(
       // the output format returned a file output format committer, which
       // is exactly what we do not want. So switch back to the factory.
       logDebug("Switching factory")
-      val factory = PathOutputCommitterFactory.getCommitterFactory(destPath,
+      val factory = PathOutputCommitterFactory.getCommitterFactory(
+        destPath,
         context.getConfiguration)
       committer = factory.createOutputCommitter(destPath, context)
     }
