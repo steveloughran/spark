@@ -100,7 +100,7 @@
 
     <!-- this inner profile is the default one and includes openstack and aws-->
     <profile>
-      <id>profile.hadoop-2.6</id>
+      <id>hadoop-2.6</id>
       <activation>
         <activeByDefault>true</activeByDefault>
       </activation>
@@ -324,7 +324,7 @@
      enables cloud-specific committers.
     -->
     <profile>
-      <id>hadoop-3.1</id>
+      <id>hadoop-3.0</id>
       <properties>
         <extra.source.dir>src/hadoop-3/main/scala</extra.source.dir>
         <extra.testsource.dir>src/hadoop-3/test/scala</extra.testsource.dir>
@@ -396,9 +396,7 @@
             </exclusion>
           </exclusions>
         </dependency>
-
       </dependencies>
-
     </profile>
 
   </profiles>
