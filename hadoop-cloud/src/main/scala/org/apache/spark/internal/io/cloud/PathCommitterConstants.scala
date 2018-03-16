@@ -18,7 +18,8 @@
 package org.apache.spark.internal.io.cloud
 
 /**
- * Constants general to all the committers.
+ * Constants in the Hadoop codebase related to committer setup
+ * and configuration.
  */
 object PathCommitterConstants {
 

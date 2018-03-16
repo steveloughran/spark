@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package com.hortonworks.spark.cloud.s3.commit
+package org.apache.spark.internal.io.cloud
 
 import java.io.IOException
 
@@ -26,7 +26,6 @@ import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{Job, JobStatus, MRJobConfig, TaskAttemptID}
 
 import org.apache.spark.SparkFunSuite
-import org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter
 import org.apache.spark.internal.io.cloud.PathCommitterConstants._
 
 /**

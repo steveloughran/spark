@@ -72,6 +72,13 @@ class PathOutputCommitProtocol(
 
   import PathOutputCommitProtocol._
 
+  /**
+   * Set up the committer.
+   * This creates it by talking directly to the Hadoop factories, instead
+   * of asking the output format job configuration.
+   * @param context task attempt
+   * @return the committer to use.
+   */
   override protected def setupCommitter(
     context: TaskAttemptContext): OutputCommitter = {
     logInfo(s"Setting up committer for path $destination")

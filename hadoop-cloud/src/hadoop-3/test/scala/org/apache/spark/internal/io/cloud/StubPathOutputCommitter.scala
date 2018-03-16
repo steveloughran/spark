@@ -15,14 +15,12 @@
  * limitations under the License.
  */
 
-package com.hortonworks.spark.cloud.s3.commit
+package org.apache.spark.internal.io.cloud
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.lib.output.{PathOutputCommitter, PathOutputCommitterFactory}
 import org.apache.hadoop.mapreduce.{JobContext, JobStatus, TaskAttemptContext}
-
-import org.apache.spark.internal.io.cloud.PathCommitterConstants
 
 class StubPathOutputCommitter(
     outputPath: Path,
@@ -89,8 +87,13 @@ class StubPathOutputCommitterFactory extends PathOutputCommitterFactory {
 }
 
 object StubPathOutputCommitterFactory {
-  val Name: String = "com.hortonworks.spark.cloud.s3.commit.StubPathOutputCommitterFactory"
+  val Name: String = "org.apache.spark.internal.io.cloud.StubPathOutputCommitterFactory"
 
+  /**
+   * Given a hadoop configuration, set up the factory binding for the scheme.
+   * @param conf config to patch
+   * @param scheme filesystem scheme.
+   */
   def bind(conf: Configuration, scheme: String): Unit = {
     val key = String.format(
       PathCommitterConstants.OUTPUTCOMMITTER_FACTORY_SCHEME_PATTERN, scheme)
