@@ -98,7 +98,7 @@
 
   <profiles>
 
-    <!-- this inner profile is the default one and includes openstack and aws-->
+    <!-- this inner profile is the default one and includes openstack and aws -->
     <profile>
       <id>hadoop-2.6</id>
       <activation>
@@ -172,7 +172,7 @@
 
         <!--
         Add joda time to ensure that anything downstream which doesn't pull in spark-hive
-        gets the correct joda time artifact, so doesn't have auth failures on later Java 8 JVMs
+        gets the correct joda time artifact, so doesn't have auth failures on later Java 8 JVMs.
         -->
         <dependency>
           <groupId>joda-time</groupId>
@@ -321,10 +321,10 @@
 
     <!--
      Hadoop 3 simplifies the classpath, and adds a new committer base class which
-     enables cloud-specific committers.
+     enables store-specific committers.
     -->
     <profile>
-      <id>hadoop-3.0</id>
+      <id>hadoop-3</id>
       <properties>
         <extra.source.dir>src/hadoop-3/main/scala</extra.source.dir>
         <extra.testsource.dir>src/hadoop-3/test/scala</extra.testsource.dir>
@@ -370,7 +370,7 @@
 
         <!--
         There's now a hadoop-cloud-storage which transitively pulls in the store JARs,
-        but it still needs some selective exclusion across versions, especially 3.0.
+        but it still needs some selective exclusion across versions, especially 3.0.x.
         -->
         <dependency>
           <groupId>org.apache.hadoop</groupId>

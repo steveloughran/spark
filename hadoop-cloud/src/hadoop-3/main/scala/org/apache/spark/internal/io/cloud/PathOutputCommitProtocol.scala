@@ -19,8 +19,8 @@ package org.apache.spark.internal.io.cloud
 
 import java.io.IOException
 
-import org.apache.hadoop.fs.{Path, PathIOException}
-import org.apache.hadoop.mapreduce.{JobContext, OutputCommitter, TaskAttemptContext}
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext}
 import org.apache.hadoop.mapreduce.lib.output.{FileOutputCommitter, PathOutputCommitter, PathOutputCommitterFactory}
 
 import org.apache.spark.internal.io.{FileCommitProtocol, HadoopMapReduceCommitProtocol}
@@ -29,22 +29,29 @@ import org.apache.spark.internal.io.FileCommitProtocol.TaskCommitMessage
 /**
  * Spark Commit protocol for Path Output Committers.
  * This committer will work with the `FileOutputCommitter` and subclasses.
- * The original Spark `HadoopMapReduceCommitProtocol` could be reworked
- * use the same interface; doing it here avoids needing any changes to Spark.
  * All implementations *must* be serializable.
- *
  *
  * Rather than ask the `FileOutputFormat` for a committer, it uses the
  * `org.apache.hadoop.mapreduce.lib.output.PathOutputCommitterFactory` factory
- * API to create the committer. This is what `FileOutputFormat` does, but
- * as some subclasses do not do this, overrides those subclasses to using the
+ * API to create the committer.
+ * This is what [[org.apache.hadoop.mapreduce.lib.output.FileOutputFormat]] does,
+ * but as [[HadoopMapReduceCommitProtocol]] still uses the original
+ * `org.apache.hadoop.mapred.FileOutputFormat` binding
+ * subclasses do not do this, overrides those subclasses to using the
  * factory mechanism now supported in the base class.
  *
+ * In `setupCommitter` the factory is bonded to and the committer for
+ * the destination path chosen.
+ *
+ * @constructor Instantiate. dynamic partition overwrite is not supported,
+ *              so that committers for stores which do not support rename
+ *              will not get confused.
  * @param jobId                     job
  * @param destination               destination
  * @param dynamicPartitionOverwrite does the caller want support for dynamic
  *                                  partition overwrite. If so, it will be
  *                                  refused.
+ * @throws IOException when an unsupported dynamicPartitionOverwrite option is supplied.
  */
 class PathOutputCommitProtocol(
   jobId: String,
@@ -56,6 +63,8 @@ class PathOutputCommitProtocol(
     false) with Serializable {
 
   @transient var committer: PathOutputCommitter = _
+
+  require(destination != null, "Null destination specified")
 
   val destPath = new Path(destination)
 
@@ -75,12 +84,14 @@ class PathOutputCommitProtocol(
   /**
    * Set up the committer.
    * This creates it by talking directly to the Hadoop factories, instead
-   * of asking the output format job configuration.
+   * of the V1 `mapred.FileOutputFormat` methods.
    * @param context task attempt
-   * @return the committer to use.
+   * @return the committer to use. This will always be a subclass of
+   *         [[PathOutputCommitter]].
    */
   override protected def setupCommitter(
-    context: TaskAttemptContext): OutputCommitter = {
+    context: TaskAttemptContext): PathOutputCommitter = {
+
     logInfo(s"Setting up committer for path $destination")
     committer = PathOutputCommitterFactory.createCommitter(destPath, context)
 
@@ -91,10 +102,10 @@ class PathOutputCommitProtocol(
     if (rejectFileOutput && committer.isInstanceOf[FileOutputCommitter]) {
       // the output format returned a file output format committer, which
       // is exactly what we do not want. So switch back to the factory.
-      logDebug("Switching factory")
       val factory = PathOutputCommitterFactory.getCommitterFactory(
         destPath,
         context.getConfiguration)
+      logInfo(s"Using committer factory $factory")
       committer = factory.createOutputCommitter(destPath, context)
     }
 
@@ -126,6 +137,7 @@ class PathOutputCommitProtocol(
     taskContext: TaskAttemptContext,
     dir: Option[String],
     ext: String): String = {
+
     val workDir = committer.getWorkPath
     val parent = dir.map(d => new Path(workDir, d)).getOrElse(workDir)
     val file = new Path(parent, buildFilename(taskContext, ext))
@@ -145,6 +157,7 @@ class PathOutputCommitProtocol(
     taskContext: TaskAttemptContext,
     absoluteDir: String,
     ext: String): String = {
+
     val file = super.newTaskTempFileAbsPath(taskContext, absoluteDir, ext)
     logWarning(
       s"Creating temporary file $file for absolute path for dir $absoluteDir")
@@ -163,6 +176,7 @@ class PathOutputCommitProtocol(
   protected def buildFilename(
     taskContext: TaskAttemptContext,
     ext: String): String = {
+
     // The file name looks like part-00000-2dd664f9-d2c4-4ffe-878f-c6c70c1fb0cb_00003-c000.parquet
     // Note that %05d does not truncate the split number, so if we have more than 100000 tasks,
     // the file name is fine and won't overflow.
@@ -183,7 +197,7 @@ class PathOutputCommitProtocol(
   }
 
   /**
-   * Abort the job; log and ignore any failure thrown.
+   * Abort the job; log and ignore any IO exception thrown.
    *
    * @param jobContext job context
    */
@@ -233,7 +247,9 @@ object PathOutputCommitProtocol {
    * Fail fast if the committer is using the path output protocol.
    * This option can be used to catch configuration issues early.
    *
-   * It's mostly relevant when testing.
+   * It's mostly relevant when testing/diagnostics, as it can be used to
+   * enforce that schema-specific options are triggering a switch
+   * to a new committer.
    */
   val REJECT_FILE_OUTPUT = "pathoutputcommit.reject.fileoutput"
 

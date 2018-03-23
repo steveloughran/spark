@@ -17,6 +17,8 @@
 
 package org.apache.spark.internal.io.cloud
 
+import java.io.IOException
+
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.lib.output.{BindingPathOutputCommitter, PathOutputCommitter}
 import org.apache.hadoop.mapreduce.{JobContext, JobStatus, TaskAttemptContext}
@@ -27,8 +29,11 @@ import org.apache.spark.internal.Logging
 
 /**
  * This dynamically binds to the factory-configured
- * output committer, and is intended to allow callers to use any `PathOutputCommitter`,
- * even if not a subclass of `ParquetOutputCommitter`.
+ * output committer, and is intended to allow callers to use any [[PathOutputCommitter]],
+ * even if not a subclass of [[ParquetOutputCommitter]].
+ *
+ * The Parquet "parquet.enable.summary-metadata" option will only be supported
+ * if the instantiated committer itself supports it.
  */
 
 class BindingParquetOutputCommitter(
@@ -88,10 +93,21 @@ class BindingParquetOutputCommitter(
     committer.recoverTask(taskAttemptContext)
   }
 
+  /**
+   * Abort the job; log and ignore any IO exception thrown.
+   *
+   * @param jobContext job context
+   * @param state final state of the job
+   */
   override def abortJob(
       jobContext: JobContext,
       state: JobStatus.State): Unit = {
-    committer.abortJob(jobContext, state)
+    try {
+      committer.abortJob(jobContext, state)
+    } catch {
+      case e: IOException =>
+        logWarning("Abort job failed", e)
+    }
   }
 
   override def isRecoverySupported: Boolean = {
