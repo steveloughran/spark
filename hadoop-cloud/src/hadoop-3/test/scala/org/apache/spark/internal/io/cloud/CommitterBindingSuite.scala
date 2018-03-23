@@ -25,22 +25,25 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{Job, JobStatus, MRJobConfig, TaskAttemptID}
 
-import org.apache.spark.SparkFunSuite
+import org.apache.spark.{SparkConf, SparkFunSuite}
+import org.apache.spark.internal.io.cloud
 import org.apache.spark.internal.io.cloud.PathCommitterConstants._
 
 /**
- * This is here to isolate the binding logic
- * in the Parquet code, specifically, does the
- * `BindingParquetOutputCommitter` committer bind to the schema-specific
- * committer declared for the destination path.
+ * Test committer binding logic
  */
-class ParquetBindingSuite extends SparkFunSuite {
+class CommitterBindingSuite extends SparkFunSuite {
 
 
   private val jobId = "2007071202143_0101"
   private val attempt0 = "attempt_" + jobId + "_m_000000_0"
   private val taskAttempt0 = TaskAttemptID.forName(attempt0)
 
+  /**
+   * Does the
+   * [[BindingParquetOutputCommitter]] committer bind to the schema-specific
+   * committer declared for the destination path?
+   */
   test("BindingParquetOutputCommitter will bind") {
     val path = new Path("http://example/data")
     val job = newJob(path)
@@ -58,6 +61,11 @@ class ParquetBindingSuite extends SparkFunSuite {
     assert(inner.committed, s"$inner not committed")
     parquet.abortJob(tContext, JobStatus.State.RUNNING)
     assert(inner.aborted, s"$inner not aborted")
+  }
+
+  test("cloud binding") {
+    val sc = new SparkConf()
+    cloud.bind(sc)
   }
 
   /**
