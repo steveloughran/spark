@@ -18,11 +18,10 @@
 package org.apache.spark.internal.io.cloud
 
 /**
- * Constants in the Hadoop codebase related to committer setup
- * and configuration.
+ * Constants related to Hadoop committer setup and configuration.
+ * Most of these are scattered around the hadoop-mapreduce classes.
  */
 object PathCommitterConstants {
-
 
   /**
    * Scheme prefix for per-filesystem scheme committers.
@@ -42,6 +41,7 @@ object PathCommitterConstants {
    */
   val OUTPUTCOMMITTER_FACTORY_CLASS = "mapreduce.pathoutputcommitter.factory.class"
 
+  /** Default committer factory. */
   val DEFAULT_COMMITTER_FACTORY =
     "org.apache.hadoop.mapreduce.lib.output.PathOutputCommitterFactory"
 
@@ -52,13 +52,21 @@ object PathCommitterConstants {
   val BINDING_PATH_OUTPUT_COMMITTER_CLASS =
     "org.apache.hadoop.mapreduce.lib.output.BindingPathOutputCommitter"
 
+  /**
+   * Classname of a parquet committer which just hands off to the
+   * `BindingPathOutputCommitter` in hadoop-mapreduce, which takes on the
+   * task of binding to the current factory.
+   */
   val BINDING_PARQUET_OUTPUT_COMMITTER_CLASS =
     "org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter"
 
-  val SUCCESSFUL_JOB_OUTPUT_DIR_MARKER = "mapreduce.fileoutputcommitter.marksuccessfuljobs"
+  /** hadoop-mapreduce option to choose the algorithm. */
   val FILEOUTPUTCOMMITTER_ALGORITHM_VERSION = "mapreduce.fileoutputcommitter.algorithm.version"
+
+  /** The default committer is not actually safe during task commit failures. */
   val FILEOUTPUTCOMMITTER_ALGORITHM_VERSION_DEFAULT = 2
-  // Skip cleanup _temporary folders under job's output directory
+
+  /** Skip cleanup _temporary folders under job's output directory? */
   val FILEOUTPUTCOMMITTER_CLEANUP_SKIPPED = "mapreduce.fileoutputcommitter.cleanup.skipped"
 
   /**
@@ -66,13 +74,14 @@ object PathCommitterConstants {
    * data written here is, in that algorithm, renamed into place.
    */
   val TEMP_DIR_NAME = "_temporary"
+
   /**
-   * Marker file to create on success.
+   * Name of the marker file created on success.
+   * This is a 0-byte file with the FileOutputCommitter; object store committers
+   * often add a (non-standard) manifest here.
    */
   val SUCCESS_FILE_NAME = "_SUCCESS"
 
-  /**
-   * Flag to trigger creation of a marker file on job completion.
-   */
+  /** hadoop-mapreduce option to enable the _SUCCESS marker. */
   val CREATE_SUCCESSFUL_JOB_OUTPUT_DIR_MARKER = "mapreduce.fileoutputcommitter.marksuccessfuljobs"
 }
