@@ -31,6 +31,8 @@ import scala.util.control.NonFatal
 import com.google.common.primitives.Longs
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
+import org.apache.hadoop.fs.statistics.IOStatistics
+import org.apache.hadoop.fs.statistics.IOStatisticsSnapshot
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.security.token.{Token, TokenIdentifier}
@@ -200,6 +202,18 @@ private[spark] class SparkHadoopUtil extends Logging {
     val f = () => threadStats.map(_.getBytesWritten).sum
     val baselineBytesWritten = f()
     () => f() - baselineBytesWritten
+  }
+
+  /**
+   * Returns a function that gives the IOStastics accumulated on a thread.
+   * The statistics will be reset from the time of the initial operation.
+   * @return None if the required method can't be found.
+   */
+  private[spark] def getThreadContextIOStatisticsCallback(): () => Option[IOStatistics] = {
+    // TODO: reset thread IOStats and then get the value
+    // caching the value ensures that it will not be GC'd.
+    val iostats = new IOStatisticsSnapshot
+    () => Some[iostats]
   }
 
   /**

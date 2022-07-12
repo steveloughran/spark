@@ -20,6 +20,9 @@ package org.apache.spark.executor
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, LinkedHashMap}
 
+import org.apache.hadoop.fs.statistics.IOStatistics
+import org.apache.hadoop.fs.statistics.IOStatisticsSnapshot
+
 import org.apache.spark._
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.internal.Logging
@@ -56,6 +59,7 @@ class TaskMetrics private[spark] () extends Serializable {
   private val _diskBytesSpilled = new LongAccumulator
   private val _peakExecutionMemory = new LongAccumulator
   private val _updatedBlockStatuses = new CollectionAccumulator[(BlockId, BlockStatus)]
+  private val _ioStatistics = new IOStatisticsSnapshot
 
   /**
    * Time taken on the executor to deserialize this task.
@@ -125,6 +129,12 @@ class TaskMetrics private[spark] () extends Serializable {
     // `asScala` which accesses the internal values using `java.util.Iterator`.
     _updatedBlockStatuses.value.asScala.toSeq
   }
+
+  /**
+   * IOStatistics collected during task execution from the executing thread only.
+   * @return IO Statistics.
+   */
+  def ioStatistics: IOStatistics = _ioStatistics
 
   // Setters and increment-ers
   private[spark] def setExecutorDeserializeTime(v: Long): Unit =
@@ -202,6 +212,15 @@ class TaskMetrics private[spark] () extends Serializable {
       shuffleReadMetrics.setMergeValues(tempShuffleReadMetrics.toSeq)
     }
   }
+
+  /**
+   * Merge in IOStatistics
+   * @param source statistics; may be null
+   */
+  private[spark] def mergeIOStatistics(source: IOStatistics): Unit = {
+    _ioStatistics.aggregate(source)
+  }
+
 
   // Only used for test
   private[spark] val testAccum = sys.props.get(IS_TESTING.key).map(_ => new LongAccumulator)
