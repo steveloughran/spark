@@ -130,6 +130,8 @@ object SparkHadoopWriter extends Logging {
     // is initialized in FileSystem which is happened in initWriter.
     val (outputMetrics, callback) = initHadoopOutputMetrics(context)
 
+    val updateIOStatisticCallback = SparkHadoopUtil.get.getThreadContextIOStatisticsCallback(true)
+
     // Write all rows in RDD partition.
     try {
       val ret = Utils.tryWithSafeFinallyAndFailureCallbacks {
@@ -156,6 +158,10 @@ object SparkHadoopWriter extends Logging {
 
       outputMetrics.setBytesWritten(callback())
       outputMetrics.setRecordsWritten(recordsWritten)
+      // update the IOStatistics and set it in the task metrics
+      // this will include stats on reads and writes.
+      updateIOStatisticCallback(true)
+        .foreach(stats =>context.taskMetrics().mergeIOStatistics(stats))
 
       ret
     } catch {

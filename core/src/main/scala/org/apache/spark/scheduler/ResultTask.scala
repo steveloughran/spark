@@ -24,6 +24,7 @@ import java.util.Properties
 
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.rdd.RDD
 
 /**
@@ -89,7 +90,14 @@ private[spark] class ResultTask[T, U](
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
     } else 0L
 
-    func(context, rdd.iterator(partition, context))
+    val updateIOStatisticCallback = SparkHadoopUtil.get.getThreadContextIOStatisticsCallback(true)
+
+    try {
+      func(context, rdd.iterator(partition, context))
+    } finally {
+      updateIOStatisticCallback(true)
+        .foreach(stats =>context.taskMetrics().mergeIOStatistics(stats))
+    }
   }
 
   // This is only callable on the driver side.

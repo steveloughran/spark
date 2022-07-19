@@ -29,6 +29,7 @@ import scala.collection.mutable.HashMap
 import scala.util.control.NonFatal
 
 import com.google.common.primitives.Longs
+import org.apache.commons.io.FileSystem
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
 import org.apache.hadoop.fs.statistics.IOStatistics
@@ -166,11 +167,11 @@ private[spark] class SparkHadoopUtil extends Logging {
    * getFSBytesReadOnThreadCallback is called from thread r at time t, the returned callback will
    * return the bytes read on r since t.
    */
-  private[spark] def getFSBytesReadOnThreadCallback(): () => Long = {
-    val f = () => FileSystem.getAllStatistics.asScala.map(_.getThreadStatistics.getBytesRead).sum
-    val baseline = (Thread.currentThread().getId, f())
+    private[spark] def getFSBytesReadOnThreadCallback(): () => Long = {
+      val f = () => FileSystem.getAllStatistics.asScala.map(_.getThreadStatistics.getBytesRead).sum
+      val baseline = (Thread.currentThread().getId, f())
 
-    /**
+      /**
      * This function may be called in both spawned child threads and parent task thread (in
      * PythonRDD), and Hadoop FileSystem uses thread local variables to track the statistics.
      * So we need a map to track the bytes read from the child threads and parent thread,
@@ -207,13 +208,27 @@ private[spark] class SparkHadoopUtil extends Logging {
   /**
    * Returns a function that gives the IOStastics accumulated on a thread.
    * The statistics will be reset from the time of the initial operation.
-   * @return None if the required method can't be found.
+   * @return a function to take a closing flag and return an updated context
+   *         or a snapshot of the statistics since the last update
    */
-  private[spark] def getThreadContextIOStatisticsCallback(): () => Option[IOStatistics] = {
-    // TODO: reset thread IOStats and then get the value
-    // caching the value ensures that it will not be GC'd.
-    val iostats = new IOStatisticsSnapshot
-    () => Some[iostats]
+  private[spark] def getThreadContextIOStatisticsCallback(resetContext: Boolean): (Boolean) => Option[IOStatistics] = {
+    // caching the value ensures that it will not be GC'd
+    val context: IOStatisticsContext = IOStatisticsContext.getCurrentThreadContext
+    if (resetContext) {
+      context.reset();
+    }
+
+    // the function
+    (closing) => {
+      if (closing) {
+        val snaphshot = context.snapshot()
+        Some[snapshot]
+      } else {
+        None
+      }
+
+
+    }
   }
 
   /**

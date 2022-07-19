@@ -25,6 +25,7 @@ import scala.collection.immutable.Map
 import scala.reflect.ClassTag
 
 import org.apache.hadoop.conf.{Configurable, Configuration}
+import org.apache.hadoop.fs.statistics.IOStatistics
 import org.apache.hadoop.io.compress.CompressionCodecFactory
 import org.apache.hadoop.mapred._
 import org.apache.hadoop.mapred.lib.CombineFileSplit
@@ -267,6 +268,11 @@ class HadoopRDD[K, V](
         case _ => None
       }
 
+      // callback to measure IO which takes place during in this thread.
+      private val updateIOStatisticCallback: (Boolean) => Option[IOStatistics]  =
+        SparkHadoopUtil.get.getThreadContextIOStatisticsCallback(true)
+
+
       // We get our input bytes from thread-local Hadoop FileSystem statistics.
       // If we do a coalesce, however, we are likely to compute multiple partitions in the same
       // task and in the same thread, in which case we need to avoid override values written by
@@ -357,6 +363,11 @@ class HadoopRDD[K, V](
                 logWarning("Unable to get input size to set InputMetrics for task", e)
             }
           }
+          // update the IOStatistics and set it in the task metrics
+          // this will include stats on reads and writes.
+          updateIOStatisticCallback(true)
+            .foreach(stats =>context.taskMetrics().mergeIOStatistics(stats))
+
         }
       }
     }

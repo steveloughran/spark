@@ -195,6 +195,16 @@ class NewHadoopRDD[K, V](
           case _ => None
         }
 
+
+      // callback to measure IO which takes place during in this thread.
+      private val updateIOStatisticCallback: Option[(Boolean) => Option[IOStatistics]]  =
+        split.serializableHadoopSplit.value match {
+          case _: FileSplit | _: CombineFileSplit =>
+            Some(SparkHadoopUtil.get.getThreadContextIOStatisticsCallback(true))
+          case _ => None
+        }
+
+
       // We get our input bytes from thread-local Hadoop FileSystem statistics.
       // If we do a coalesce, however, we are likely to compute multiple partitions in the same
       // task and in the same thread, in which case we need to avoid override values written by
@@ -311,6 +321,15 @@ class NewHadoopRDD[K, V](
               case e: java.io.IOException =>
                 logWarning("Unable to get input size to set InputMetrics for task", e)
             }
+          }
+
+          if (updateIOStatisticCallback.isDefined) {
+            // update the iostatistics and set it in the task metrics
+            // this will include stats on reads and writes.
+            val statsOpt = updateIOStatisticCallback.get(true)
+            statsOpt
+              .foreach(stats =>context.taskMetrics().mergeIOStatistics(stats))
+
           }
         }
       }

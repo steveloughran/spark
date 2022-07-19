@@ -222,6 +222,17 @@ class TaskMetrics private[spark] () extends Serializable {
   }
 
 
+  /**
+   * Set the IOStatistics by resetting the current values
+   * and then merging in the supplied statistics.
+   * @param source statistics; may be null
+   */
+  private[spark] def setIOStatistics(source: IOStatistics): Unit = {
+    _ioStatistics.reset()
+    _ioStatistics.aggregate(source)
+  }
+
+
   // Only used for test
   private[spark] val testAccum = sys.props.get(IS_TESTING.key).map(_ => new LongAccumulator)
 
